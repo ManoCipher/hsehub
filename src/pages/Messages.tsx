@@ -159,14 +159,17 @@ export default function Messages() {
       const { error } = await supabase.from("notifications").insert({
         company_id: companyId,
         user_id: user?.id,
-        category: "message",
+        category: "system",  // Changed from "message" to "system" - valid category
         type: "info",
         title: `Message in ${activeChannel.name}`,
         message: messageInput,
         is_read: false,
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error("Send message error:", error);
+        throw error;
+      }
 
       setMessageInput("");
       toast({
@@ -174,9 +177,10 @@ export default function Messages() {
         description: "Your message has been delivered.",
       });
     } catch (error: any) {
+      console.error("Failed to send message - full error:", error);
       toast({
         title: "Error",
-        description: "Failed to send message",
+        description: error.message || "Failed to send message",
         variant: "destructive",
       });
     }

@@ -74,12 +74,9 @@ export default function MainLayout({ children }: Props) {
     return userRole === "super_admin" || userRole === "company_admin";
   };
 
-  const isSettingsPage = location.pathname === "/settings";
-
   return (
     <div className="flex min-h-screen bg-gray-50 dark:bg-gray-950">
-      {!isSettingsPage && (
-        <aside className="w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col h-screen sticky top-0">
+      <aside className="w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col h-screen sticky top-0">
           <div className="p-4 border-b border-gray-200 dark:border-gray-800">
             <Link to="/dashboard" className="flex items-center gap-2">
               <div className="relative">
@@ -105,11 +102,6 @@ export default function MainLayout({ children }: Props) {
             <Link to="/employees" className={getLinkClasses("/employees")}>
               <Users className="w-4 h-4" />
               <span>{t("nav.employees")}</span>
-            </Link>
-
-            <Link to="/messages" className={getLinkClasses("/messages")}>
-              <MessageSquare className="w-4 h-4" />
-              <span>{t("nav.messages")}</span>
             </Link>
 
             <Link
@@ -178,7 +170,6 @@ export default function MainLayout({ children }: Props) {
             </Button>
           </div>
         </aside>
-      )}
 
       <div className="flex-1 flex flex-col">
         <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 sticky top-0 z-10">

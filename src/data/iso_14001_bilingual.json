@@ -1,0 +1,440 @@
+{
+  "iso_code": "ISO_14001",
+  "iso_name": "ISO 14001:2015",
+  "total_sections": 7,
+  "total_criteria": 110,
+  "sections": [
+    {
+      "section_number": "1",
+      "title": "Kontext der Organisation",
+      "title_en": "Context of the Organization",
+      "sort_order": 1,
+      "subsections": [
+        {
+          "subsection_number": "1.1",
+          "title": "Externe und interne Themen identifizieren",
+          "title_en": "Identify External and Internal Issues",
+          "sort_order": 1,
+          "questions": [
+            {
+              "de": "Welche internen Faktoren (Struktur, Kultur, Technologien, Ressourcen) beeinflussen das UMS?",
+              "en": "Which internal factors (structure, culture, technologies, resources) influence the EMS?"
+            },
+            {
+              "de": "Welche externen Faktoren (Gesetze, Markt, gesellschaftliche Erwartungen) beeinflussen das UMS?",
+              "en": "Which external factors (laws, market, societal expectations) affect the EMS?"
+            },
+            {
+              "de": "Wie wird der Klimawandel als externer Faktor berücksichtigt (Risiken + Chancen)?",
+              "en": "How is climate change considered as an external factor (risks + opportunities)?"
+            },
+            {
+              "de": "Werden diese Themen regelmäßig überwacht und aktualisiert (z.B. SWOT, Risikoanalyse)?",
+              "en": "Are these issues regularly monitored and updated (e.g., SWOT, risk analysis)?"
+            },
+            {
+              "de": "Werden alle klimarelevanten Prozesse berücksichtigt (z.B. Rohstoffe, Lieferkette)?",
+              "en": "Are all climate-relevant processes considered (e.g., raw materials, supply chain)?"
+            },
+            {
+              "de": "Welche regionalen Entsorgungsinfrastrukturen beeinflussen das UMS?",
+              "en": "Which regional disposal infrastructures influence the EMS?"
+            }
+          ]
+        },
+        {
+          "subsection_number": "1.2",
+          "title": "Risikobasierter Ansatz im Klimakontext",
+          "title_en": "Risk-based Approach in Climate Context",
+          "sort_order": 2,
+          "questions": [
+            {
+              "de": "Wie werden die Auswirkungen des Klimawandels in die Umwelt- und Klimastrategie integriert?",
+              "en": "How are impacts of climate change integrated into environmental and climate strategy?"
+            },
+            {
+              "de": "Gibt es Prozesse zur Ableitung von Maßnahmen aus Chancen und Risiken?",
+              "en": "Are there processes for deriving actions from opportunities and risks?"
+            },
+            {
+              "de": "Sind diese Faktoren dokumentiert und werden regelmäßig überprüft?",
+              "en": "Are these factors documented and regularly reviewed?"
+            },
+            {
+              "de": "Wie fließen Klimafaktoren in strategische Entscheidungen ein?",
+              "en": "How do climate factors flow into strategic decisions?"
+            }
+          ]
+        },
+        {
+          "subsection_number": "1.3",
+          "title": "Erwartungen interessierter Parteien (Stakeholder)",
+          "title_en": "Expectations of Interested Parties (Stakeholders)",
+          "sort_order": 3,
+          "questions": [
+            {
+              "de": "Welche internen und externen Stakeholder sind relevant?",
+              "en": "Which internal and external stakeholders are relevant?"
+            },
+            {
+              "de": "Welche Umwelt- und Klimaanforderungen haben sie?",
+              "en": "What environmental and climate requirements do they have?"
+            },
+            {
+              "de": "Wie werden Klimaschutzanforderungen (z.B. SBT, CSRD) erfasst und priorisiert?",
+              "en": "How are climate protection requirements (e.g., SBT, CSRD) captured and prioritized?"
+            },
+            {
+              "de": "Gibt es Routinen zur Identifizierung geänderter Anforderungen (Umfragen, Bewertungen)?",
+              "en": "Are there routines for identifying changed requirements (surveys, assessments)?"
+            }
+          ]
+        },
+        {
+          "subsection_number": "1.4",
+          "title": "Anwendungsbereich des Managementsystems",
+          "title_en": "Scope of the Management System",
+          "sort_order": 4,
+          "questions": [
+            {
+              "de": "Welche Standorte, Aktivitäten, Produkte sind im UMS enthalten?",
+              "en": "Which locations, activities, products are included in the EMS?"
+            },
+            {
+              "de": "Sind alle klimarelevanten Prozesse einbezogen?",
+              "en": "Are all climate-relevant processes included?"
+            },
+            {
+              "de": "Sind Ausschlüsse begründet und dokumentiert?",
+              "en": "Are exclusions justified and documented?"
+            },
+            {
+              "de": "Wird der Anwendungsbereich intern und extern kommuniziert?",
+              "en": "Is the scope communicated internally and externally?"
+            }
+          ]
+        },
+        {
+          "subsection_number": "1.5",
+          "title": "Schnittstellen zu anderen Managementsystemen",
+          "title_en": "Interfaces to Other Management Systems",
+          "sort_order": 5,
+          "questions": [
+            {
+              "de": "Wie werden Überschneidungen mit ISO 9001/50001 etc. gehandhabt?",
+              "en": "How is overlap with ISO 9001/50001 etc. handled?"
+            },
+            {
+              "de": "Sind Ausnahmen transparent begründet?",
+              "en": "Are exceptions transparently justified?"
+            }
+          ]
+        },
+        {
+          "subsection_number": "1.6",
+          "title": "Managementsystem und Prozesse",
+          "title_en": "Management System and Processes",
+          "sort_order": 6,
+          "questions": [
+            {
+              "de": "Existiert eine Prozesslandschaft einschließlich umwelt- und klimarelevanter Prozesse?",
+              "en": "Does a process landscape exist including environmental and climate-relevant processes?"
+            },
+            {
+              "de": "Wer sind die Prozessverantwortlichen?",
+              "en": "Who are the process owners?"
+            },
+            {
+              "de": "Gibt es KPIs für ökologische Aspekte (CO₂, Abfall, Energie)?",
+              "en": "Are there KPIs for ecological aspects (CO₂, waste, energy)?"
+            },
+            {
+              "de": "Sind Schnittstellen zwischen Prozessen identifiziert und optimiert?",
+              "en": "Are interfaces between processes identified and optimized?"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section_number": "2",
+      "title": "Führung",
+      "title_en": "Leadership",
+      "sort_order": 2,
+      "subsections": [
+        {
+          "subsection_number": "2.1",
+          "title": "Verantwortung und Verpflichtung der Leitung",
+          "title_en": "Responsibility and Commitment of Management",
+          "sort_order": 1,
+          "questions": [
+            {
+              "de": "Wie zeigt die oberste Leitung ihre Unterstützung für das UMS und den Klimaschutz?",
+              "en": "How does top management demonstrate support for EMS and climate protection?"
+            },
+            {
+              "de": "Gibt es verabschiedete Klima- und Umweltziele?",
+              "en": "Are there adopted climate and environmental objectives?"
+            }
+          ]
+        },
+        {
+          "subsection_number": "2.2",
+          "title": "Umweltpolitik",
+          "title_en": "Environmental Policy",
+          "sort_order": 2,
+          "questions": [
+            {
+              "de": "Enthält die Umweltpolitik Aussagen zum Klimaschutz und zur Emissionsreduzierung?",
+              "en": "Does the environmental policy contain statements on climate protection and emission reduction?"
+            },
+            {
+              "de": "Ist sie mit der strategischen Ausrichtung verknüpft?",
+              "en": "Is it linked to the strategic direction?"
+            },
+            {
+              "de": "Enthält sie eine Verpflichtung zur kontinuierlichen Verbesserung und Erfüllung von Anforderungen?",
+              "en": "Does it contain commitment to continuous improvement and compliance with requirements?"
+            },
+            {
+              "de": "Wird sie regelmäßig aktualisiert?",
+              "en": "Is it regularly updated?"
+            },
+            {
+              "de": "Enthält sie Verpflichtungen zu Abfallvermeidung, Recycling, nachhaltiger Beschaffung?",
+              "en": "Does it contain commitments to waste prevention, recycling, sustainable procurement?"
+            },
+            {
+              "de": "Unterstützt die Leitung aktiv Klimaschutzprojekte?",
+              "en": "Does management actively support climate protection projects?"
+            }
+          ]
+        },
+        {
+          "subsection_number": "2.3",
+          "title": "Rollen, Verantwortlichkeiten und Befugnisse",
+          "title_en": "Roles, Responsibilities and Authorities",
+          "sort_order": 3,
+          "questions": [
+            {
+              "de": "Sind Umweltrollen klar definiert?",
+              "en": "Are environmental roles clearly defined?"
+            },
+            {
+              "de": "Haben die Verantwortlichen die Befugnis, Klimaschutzmaßnahmen umzusetzen?",
+              "en": "Do responsible parties have authority to implement climate protection measures?"
+            },
+            {
+              "de": "Gibt es Vertretungsregelungen?",
+              "en": "Are there backup arrangements?"
+            }
+          ]
+        },
+        {
+          "subsection_number": "2.4",
+          "title": "Beteiligung und Konsultation der Beschäftigten",
+          "title_en": "Participation and Consultation of Workers",
+          "sort_order": 4,
+          "questions": [
+            {
+              "de": "Wie werden Mitarbeiter eingebunden (Schulungen, Workshops, Ideenmanagement)?",
+              "en": "How are employees involved (training, workshops, idea management)?"
+            },
+            {
+              "de": "Welche Kommunikationskanäle existieren?",
+              "en": "What communication channels exist?"
+            },
+            {
+              "de": "Gibt es Feedbackmöglichkeiten?",
+              "en": "Are there feedback opportunities?"
+            },
+            {
+              "de": "Wie werden Informationen zu Umweltthemen kommuniziert?",
+              "en": "How is information about environmental topics communicated?"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section_number": "3",
+      "title": "Planung",
+      "title_en": "Planning",
+      "sort_order": 3,
+      "subsections": [
+        {
+          "subsection_number": "3.1",
+          "title": "Maßnahmen zum Umgang mit Risiken und Chancen",
+          "title_en": "Actions to Address Risks and Opportunities",
+          "sort_order": 1,
+          "questions": [
+            {
+              "de": "Werden Umwelt- und Klimarisiken identifiziert und bewertet?",
+              "en": "Are environmental and climate risks identified and assessed?"
+            },
+            {
+              "de": "Wie werden Chancen genutzt (Förderprogramme, grüne Märkte)?",
+              "en": "How are opportunities utilized (funding programs, green markets)?"
+            },
+            {
+              "de": "Gibt es eine Priorisierung der Maßnahmen?",
+              "en": "Is there prioritization of actions?"
+            },
+            {
+              "de": "Gibt es Verantwortlichkeiten und Zeitpläne?",
+              "en": "Are there responsibilities and timeframes?"
+            }
+          ]
+        },
+        {
+          "subsection_number": "3.2",
+          "title": "Rechtliche und andere Anforderungen",
+          "title_en": "Legal and Other Requirements",
+          "sort_order": 2,
+          "questions": [
+            {
+              "de": "Existiert ein Rechtskataster für Umwelt/Klima?",
+              "en": "Does a legal register exist for environment/climate?"
+            },
+            {
+              "de": "Wie werden Rechtsänderungen identifiziert und umgesetzt?",
+              "en": "How are legal changes identified and implemented?"
+            },
+            {
+              "de": "Gibt es freiwillige Klimaziele (SBT, Net-Zero)?",
+              "en": "Are there voluntary climate targets (SBT, Net-Zero)?"
+            },
+            {
+              "de": "Sind Verpflichtungen dokumentiert und werden verfolgt?",
+              "en": "Are commitments documented and tracked?"
+            }
+          ]
+        },
+        {
+          "subsection_number": "3.3",
+          "title": "Umweltziele und Planung",
+          "title_en": "Environmental Objectives and Planning",
+          "sort_order": 3,
+          "questions": [
+            {
+              "de": "Sind die Ziele SMART formuliert?",
+              "en": "Are objectives formulated SMART?"
+            },
+            {
+              "de": "Welche KPIs werden verwendet (CO₂, Energie, Abfall)?",
+              "en": "Which KPIs are used (CO₂, energy, waste)?"
+            },
+            {
+              "de": "Sind Maßnahmen, Ressourcen, Verantwortliche definiert?",
+              "en": "Are actions, resources, responsible parties defined?"
+            },
+            {
+              "de": "Wird über den Fortschritt berichtet?",
+              "en": "Is progress reported?"
+            },
+            {
+              "de": "Gibt es konkrete Emissionsreduktions- und Abfallziele?",
+              "en": "Are there concrete emission reduction and waste targets?"
+            }
+          ]
+        },
+        {
+          "subsection_number": "3.4",
+          "title": "Notfall- und Krisenplanung",
+          "title_en": "Emergency and Crisis Planning",
+          "sort_order": 4,
+          "questions": [
+            {
+              "de": "Gibt es Szenarien für klimabedingte Ereignisse (Hitze, Überschwemmung, Lieferketten)?",
+              "en": "Are there scenarios for climate-related events (heat, flood, supply chains)?"
+            },
+            {
+              "de": "Gibt es Präventivmaßnahmen (Hochwasserschutz, Notstrom)?",
+              "en": "Are there preventive measures (flood protection, emergency power)?"
+            },
+            {
+              "de": "Gibt es Pläne für Personalausfälle oder umweltkritische Prozesse?",
+              "en": "Are there plans for personnel absences or environmentally critical processes?"
+            }
+          ]
+        },
+        {
+          "subsection_number": "3.5",
+          "title": "Bestimmung der Umweltaspekte",
+          "title_en": "Determination of Environmental Aspects",
+          "sort_order": 5,
+          "questions": [
+            {
+              "de": "Werden alle Prozesse hinsichtlich Umweltauswirkungen bewertet?",
+              "en": "Are all processes assessed regarding environmental impact?"
+            },
+            {
+              "de": "Wird der Lebenszyklusansatz berücksichtigt?",
+              "en": "Is the life cycle approach considered?"
+            },
+            {
+              "de": "Gibt es Kriterien/Methoden zur Bewertung der Signifikanz?",
+              "en": "Are there criteria/methods for assessing significance?"
+            },
+            {
+              "de": "Werden Emissions- und Ressourcenaspekte erfasst?",
+              "en": "Are emission and resource aspects captured?"
+            },
+            {
+              "de": "Werden Entwicklungsprojekte rechtzeitig einbezogen?",
+              "en": "Are development projects involved in a timely manner?"
+            },
+            {
+              "de": "Wird die Liste regelmäßig aktualisiert?",
+              "en": "Is the list regularly updated?"
+            },
+            {
+              "de": "Sind signifikante Aspekte in die Ziele integriert?",
+              "en": "Are significant aspects integrated into objectives?"
+            },
+            {
+              "de": "Gibt es Aktionspläne zur Reduzierung der Auswirkungen?",
+              "en": "Are there action plans to reduce impacts?"
+            }
+          ]
+        },
+        {
+          "subsection_number": "3.6",
+          "title": "Gefahrstoffmanagement",
+          "title_en": "Hazardous Materials Management",
+          "sort_order": 6,
+          "questions": [
+            {
+              "de": "Gibt es ein Gefahrstoffkataster?",
+              "en": "Is there a hazardous materials register?"
+            },
+            {
+              "de": "Gibt es eine CLP/GHS-Klassifizierung?",
+              "en": "Is there CLP/GHS classification?"
+            },
+            {
+              "de": "Wie werden Umweltauswirkungen bewertet?",
+              "en": "How are environmental impacts assessed?"
+            },
+            {
+              "de": "Wird der Lebenszyklus von Gefahrstoffen berücksichtigt?",
+              "en": "Is the life cycle of hazardous materials considered?"
+            },
+            {
+              "de": "Werden Expositionspfade bewertet?",
+              "en": "Are exposure pathways assessed?"
+            },
+            {
+              "de": "Werden REACH/CLP-Anforderungen erfüllt?",
+              "en": "Are REACH/CLP requirements met?"
+            },
+            {
+              "de": "Werden Änderungen überwacht und umgesetzt?",
+              "en": "Are changes monitored and implemented?"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

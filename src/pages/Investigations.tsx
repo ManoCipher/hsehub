@@ -19,7 +19,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Edit, FileDown, Calendar, Users } from "lucide-react";
+import { Plus, Search, Edit, FileDown, Calendar, Users, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Dialog,
@@ -85,7 +85,26 @@ interface ExposureGroup {
   name: string;
 }
 
-type ViewMode = "employee" | "date";
+interface HealthCheckup {
+  id: string;
+  employee_id: string;
+  company_id: string;
+  investigation_name: string;
+  appointment_date: string;
+  completion_date?: string | null;
+  due_date?: string | null;
+  status: string;
+  certificate_url?: string | null;
+  notes: string | null;
+  employee?: {
+    full_name: string;
+    employee_number: string;
+    departments?: { name: string };
+    exposure_groups?: { name: string };
+  };
+}
+
+type ViewMode = "employee" | "date" | "checkup";
 
 export default function Investigations() {
   const { user, loading, companyId } = useAuth();
@@ -93,18 +112,15 @@ export default function Investigations() {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // View mode state
-  const [viewMode, setViewMode] = useState<ViewMode>("employee");
-
-  // Data states
+  // State variables
   const [investigations, setInvestigations] = useState<Investigation[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [exposureGroups, setExposureGroups] = useState<ExposureGroup[]>([]);
-
-  // Filter states
+  const [healthCheckups, setHealthCheckups] = useState<HealthCheckup[]>([]);
+  const [gInvestigations, setGInvestigations] = useState<any[]>([]);
+  const [viewMode, setViewMode] = useState<ViewMode>("employee");
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterDepartment, setFilterDepartment] = useState<string>("all");
   const [filterLocation, setFilterLocation] = useState<string>("all");
   const [filterGroup, setFilterGroup] = useState<string>("all");
@@ -132,6 +148,11 @@ export default function Investigations() {
     recommendations: "",
   });
 
+  // Bulk delete states
+  const [selectedInvestigations, setSelectedInvestigations] = useState<Set<string>>(new Set());
+  const [selectedCheckups, setSelectedCheckups] = useState<Set<string>>(new Set());
+  const [isDeleting, setIsDeleting] = useState(false);
+
   useEffect(() => {
     if (!loading && !user) {
       navigate("/auth");
@@ -144,6 +165,8 @@ export default function Investigations() {
       fetchEmployees();
       fetchDepartments();
       fetchExposureGroups();
+      fetchHealthCheckups();
+      fetchGInvestigations();
     }
   }, [companyId]);
 
@@ -234,6 +257,55 @@ export default function Investigations() {
     }
   };
 
+  const fetchHealthCheckups = async () => {
+    if (!companyId) return;
+
+    try {
+      const { data, error } = await supabase
+        .from("health_checkups")
+        .select(
+          `
+          *,
+          employee:employees(
+            full_name,
+            employee_number,
+            departments(name),
+            exposure_groups(name)
+          )
+        `
+        )
+        .eq("company_id", companyId)
+        .order("appointment_date", { ascending: false });
+
+      if (error) throw error;
+      setHealthCheckups((data as any) || []);
+    } catch (error: any) {
+      console.error("Error fetching health checkups:", error);
+    }
+  };
+
+  const fetchGInvestigations = async () => {
+    if (!companyId) return;
+
+    try {
+      const { data, error } = await supabase
+        .from("g_investigations")
+        .select("*")
+        .eq("company_id", companyId)
+        .order("name");
+
+      if (error) {
+        console.log("G-Investigations table not created yet");
+        setGInvestigations([]);
+        return;
+      }
+      setGInvestigations(data || []);
+    } catch (error) {
+      console.error("Error fetching G-Investigations:", error);
+      setGInvestigations([]);
+    }
+  };
+
   const generateInvestigationId = () => {
     const date = new Date();
     const year = date.getFullYear();
@@ -242,6 +314,101 @@ export default function Investigations() {
       .toString()
       .padStart(3, "0");
     return `G-${year}${month}-${random}`;
+  };
+
+  // Helper function to sync investigation data to health_checkups table
+  const syncToHealthCheckups = async (
+    investigationData: any,
+    investigationId: string
+  ) => {
+    if (!investigationData.assigned_to_id || !companyId) return;
+    try {
+      // Find the full G-Investigation name from the g_investigations list
+      const gInvestigation = gInvestigations.find(
+        (g) => g.name === investigationData.g_code
+      );
+      const investigationName = gInvestigation
+        ? gInvestigation.name
+        : investigationData.g_code || investigationData.investigation_id;
+
+      // Prepare health checkup data
+      const checkupData: any = {
+        employee_id: investigationData.assigned_to_id,
+        company_id: companyId,
+        investigation_id: investigationId,
+        investigation_name: investigationName,
+        appointment_date:
+          investigationData.appointment_date || investigationData.start_date || new Date().toISOString().split('T')[0],
+        status:
+          investigationData.status === "completed"
+            ? "done"
+            : investigationData.status,
+        notes:
+          [
+            investigationData.doctor
+              ? `Doctor: ${investigationData.doctor}`
+              : null,
+            investigationData.description,
+            investigationData.findings,
+            investigationData.recommendations,
+          ]
+            .filter(Boolean)
+            .join("\n\n") || null,
+      };
+
+      // Only add due_date if it exists (for backward compatibility)
+      if (investigationData.due_date) {
+        checkupData.due_date = investigationData.due_date;
+      }
+
+      console.log("Syncing to health_checkups:", checkupData);
+
+      // Check if a health checkup already exists for this investigation
+      const { data: existing, error: fetchError } = await supabase
+        .from("health_checkups")
+        .select("id")
+        .eq("investigation_id", investigationId)
+        .maybeSingle();
+      
+      if (fetchError && fetchError.code !== "PGRST116") {
+        console.error("Error checking existing health checkup:", fetchError);
+        return;
+      }
+      
+      if (existing) {
+        // Update existing health checkup
+        console.log("Updating existing checkup:", existing.id);
+        const { error: updateError } = await supabase
+          .from("health_checkups")
+          .update(checkupData)
+          .eq("id", existing.id);
+        
+        if (updateError) {
+          console.error("Error updating health checkup:", updateError);
+          throw updateError;
+        } else {
+          console.log("Successfully updated health checkup");
+        }
+      } else {
+        // Create new health checkup
+        console.log("Creating new health checkup");
+        const { data: newCheckup, error: insertError } = await supabase
+          .from("health_checkups")
+          .insert(checkupData)
+          .select()
+          .single();
+        
+        if (insertError) {
+          console.error("Error creating health checkup:", insertError);
+          throw insertError;
+        } else {
+          console.log("Successfully created health checkup:", newCheckup);
+        }
+      }
+    } catch (error) {
+      console.error("Error syncing to health checkups:", error);
+      throw error;
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -274,18 +441,49 @@ export default function Investigations() {
           .from("investigations")
           .update(investigationData)
           .eq("id", editingInvestigation.id);
-
         if (error) throw error;
+        
+        // Sync with health_checkups if employee is assigned
+        if (investigationData.assigned_to_id) {
+          try {
+            await syncToHealthCheckups(
+              investigationData,
+              editingInvestigation.id
+            );
+          } catch (syncError: any) {
+            console.error("Failed to sync to health checkups:", syncError);
+            toast({
+              title: "Warning",
+              description: "Investigation updated but failed to sync checkup: " + (syncError.message || "Unknown error"),
+              variant: "destructive",
+            });
+          }
+        }
         toast({
           title: t("common.success"),
           description: t("investigations.updated"),
         });
       } else {
-        const { error } = await supabase
+        const { data: newInvestigation, error } = await supabase
           .from("investigations" as any)
-          .insert(investigationData as any);
-
+          .insert(investigationData as any)
+          .select()
+          .single();
         if (error) throw error;
+        
+        // Sync with health_checkups if employee is assigned
+        if (investigationData.assigned_to_id && newInvestigation) {
+          try {
+            await syncToHealthCheckups(investigationData, newInvestigation.id);
+          } catch (syncError: any) {
+            console.error("Failed to sync to health checkups:", syncError);
+            toast({
+              title: "Warning",
+              description: "Investigation created but failed to sync checkup: " + (syncError.message || "Unknown error"),
+              variant: "destructive",
+            });
+          }
+        }
         toast({
           title: t("common.success"),
           description: t("investigations.created"),
@@ -295,6 +493,7 @@ export default function Investigations() {
       setIsDialogOpen(false);
       resetForm();
       fetchInvestigations();
+      fetchHealthCheckups();
     } catch (error: any) {
       toast({
         title: t("common.error"),
@@ -339,6 +538,129 @@ export default function Investigations() {
       recommendations: "",
     });
     setEditingInvestigation(null);
+  };
+
+  // Bulk delete handlers
+  const handleSelectAll = () => {
+    const allIds = groupedByEmployee.flatMap(item => 
+      item.investigations.map(inv => inv.id)
+    );
+    if (selectedInvestigations.size === allIds.length) {
+      setSelectedInvestigations(new Set());
+    } else {
+      setSelectedInvestigations(new Set(allIds));
+    }
+  };
+
+  const handleSelectInvestigation = (investigationId: string) => {
+    const newSelected = new Set(selectedInvestigations);
+    if (newSelected.has(investigationId)) {
+      newSelected.delete(investigationId);
+    } else {
+      newSelected.add(investigationId);
+    }
+    setSelectedInvestigations(newSelected);
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedInvestigations.size === 0) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${selectedInvestigations.size} investigation(s)? This action cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    setIsDeleting(true);
+    try {
+      const { error } = await supabase
+        .from("investigations")
+        .delete()
+        .in("id", Array.from(selectedInvestigations));
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: `Successfully deleted ${selectedInvestigations.size} investigation(s)`,
+      });
+      setSelectedInvestigations(new Set());
+      fetchInvestigations();
+    } catch (error: any) {
+      console.error("Error deleting investigations:", error);
+      
+      // Show detailed error message
+      const errorMessage = error?.message || error?.details || error?.hint || "Failed to delete investigations";
+      const errorDetails = error?.code ? ` (Error code: ${error.code})` : "";
+      
+      toast({
+        title: "Error",
+        description: `${errorMessage}${errorDetails}`,
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Bulk delete handlers for checkups
+  const handleSelectAllCheckups = () => {
+    const allIds = healthCheckups.map(c => c.id);
+    if (selectedCheckups.size === allIds.length) {
+      setSelectedCheckups(new Set());
+    } else {
+      setSelectedCheckups(new Set(allIds));
+    }
+  };
+
+  const handleSelectCheckup = (checkupId: string) => {
+    const newSelected = new Set(selectedCheckups);
+    if (newSelected.has(checkupId)) {
+      newSelected.delete(checkupId);
+    } else {
+      newSelected.add(checkupId);
+    }
+    setSelectedCheckups(newSelected);
+  };
+
+  const handleBulkDeleteCheckups = async () => {
+    if (selectedCheckups.size === 0) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${selectedCheckups.size} checkup(s)? This action cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    setIsDeleting(true);
+    try {
+      const { error } = await supabase
+        .from("health_checkups")
+        .delete()
+        .in("id", Array.from(selectedCheckups));
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: `Successfully deleted ${selectedCheckups.size} checkup(s)`,
+      });
+      setSelectedCheckups(new Set());
+      fetchHealthCheckups();
+    } catch (error: any) {
+      console.error("Error deleting checkups:", error);
+      
+      const errorMessage = error?.message || error?.details || error?.hint || "Failed to delete checkups";
+      const errorDetails = error?.code ? ` (Error code: ${error.code})` : "";
+      
+      toast({
+        title: "Error",
+        description: `${errorMessage}${errorDetails}`,
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -519,6 +841,21 @@ export default function Investigations() {
               </CardDescription>
             </div>
             <div className="flex gap-2">
+              {(selectedInvestigations.size > 0 || selectedCheckups.size > 0) && (
+                <Button
+                  variant="destructive"
+                  onClick={viewMode === "checkup" ? handleBulkDeleteCheckups : handleBulkDelete}
+                  disabled={isDeleting}
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  {isDeleting 
+                    ? 'Deleting...' 
+                    : viewMode === "checkup" 
+                      ? `Delete (${selectedCheckups.size})`
+                      : `Delete (${selectedInvestigations.size})`
+                  }
+                </Button>
+              )}
               <Button variant="outline" onClick={exportToPDF}>
                 <FileDown className="w-4 h-4 mr-2" />
                 {t("investigations.exportPDF")}
@@ -547,15 +884,38 @@ export default function Investigations() {
                         <Label htmlFor="g_code">
                           {t("investigations.gCode")} *
                         </Label>
-                        <Input
-                          id="g_code"
-                          value={formData.g_code}
-                          onChange={(e) =>
-                            setFormData({ ...formData, g_code: e.target.value })
-                          }
-                          placeholder="z.B. G37, G11, G7"
-                          required
-                        />
+                        {gInvestigations.length === 0 ? (
+                          <Input
+                            id="g_code"
+                            value={formData.g_code}
+                            onChange={(e) =>
+                              setFormData({
+                                ...formData,
+                                g_code: e.target.value,
+                              })
+                            }
+                            placeholder="z.B. G37, G11, G7"
+                            required
+                          />
+                        ) : (
+                          <Select
+                            value={formData.g_code}
+                            onValueChange={(value) =>
+                              setFormData({ ...formData, g_code: value })
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select G-Investigation" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {gInvestigations.map((inv) => (
+                                <SelectItem key={inv.id} value={inv.name}>
+                                  {inv.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
                       </div>
                       <div>
                         <Label htmlFor="assigned_to">
@@ -738,6 +1098,14 @@ export default function Investigations() {
               <Calendar className="w-4 h-4 mr-2" />
               {t("investigations.dateView")}
             </Button>
+            <Button
+              variant={viewMode === "checkup" ? "default" : "outline"}
+              onClick={() => setViewMode("checkup")}
+              className="flex-1"
+            >
+              <FileDown className="w-4 h-4 mr-2" />
+              Checkup View
+            </Button>
           </div>
 
           {/* Filters */}
@@ -827,11 +1195,17 @@ export default function Investigations() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-12">
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 cursor-pointer"
+                        checked={groupedByEmployee.length > 0 && selectedInvestigations.size === groupedByEmployee.flatMap(item => item.investigations).length}
+                        onChange={handleSelectAll}
+                      />
+                    </TableHead>
                     <TableHead>{t("common.lastName")}</TableHead>
                     <TableHead>{t("common.firstName")}</TableHead>
                     <TableHead>{t("common.department")}</TableHead>
-                    <TableHead>{t("common.location")}</TableHead>
-                    <TableHead>{t("common.group")}</TableHead>
                     <TableHead>{t("investigations.gCode")}</TableHead>
                     <TableHead className="text-right">
                       {t("common.actions")}
@@ -842,7 +1216,7 @@ export default function Investigations() {
                   {groupedByEmployee.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={7}
+                        colSpan={6}
                         className="text-center py-8 text-muted-foreground"
                       >
                         {t("investigations.noInvestigations")}
@@ -881,16 +1255,25 @@ export default function Investigations() {
 
                         return (
                           <TableRow key={item.employee.id}>
+                            <TableCell>
+                              <div className="flex flex-col gap-1">
+                                {item.investigations.map((inv) => (
+                                  <input
+                                    key={inv.id}
+                                    type="checkbox"
+                                    className="w-4 h-4 cursor-pointer"
+                                    checked={selectedInvestigations.has(inv.id)}
+                                    onChange={() => handleSelectInvestigation(inv.id)}
+                                  />
+                                ))}
+                              </div>
+                            </TableCell>
                             <TableCell className="font-medium">
                               {lastName}
                             </TableCell>
                             <TableCell>{firstName}</TableCell>
                             <TableCell>
                               {item.employee.departments?.name || "—"}
-                            </TableCell>
-                            <TableCell>—</TableCell>
-                            <TableCell>
-                              {item.employee.exposure_groups?.name || "—"}
                             </TableCell>
                             <TableCell>
                               <div className="flex flex-wrap gap-1">
@@ -923,11 +1306,26 @@ export default function Investigations() {
                   )}
                 </TableBody>
               </Table>
-            ) : (
+            ) : viewMode === "date" ? (
               // Date View
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-12">
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 cursor-pointer"
+                        checked={filteredInvestigations.length > 0 && selectedInvestigations.size === filteredInvestigations.length}
+                        onChange={() => {
+                          const allIds = filteredInvestigations.map(inv => inv.id);
+                          if (selectedInvestigations.size === allIds.length) {
+                            setSelectedInvestigations(new Set());
+                          } else {
+                            setSelectedInvestigations(new Set(allIds));
+                          }
+                        }}
+                      />
+                    </TableHead>
                     <TableHead>{t("common.employee")}</TableHead>
                     <TableHead>{t("investigations.gCode")}</TableHead>
                     <TableHead>{t("dueDate")}</TableHead>
@@ -943,7 +1341,7 @@ export default function Investigations() {
                   {filteredInvestigations.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={7}
+                        colSpan={8}
                         className="text-center py-8 text-muted-foreground"
                       >
                         {t("investigations.noInvestigations")}
@@ -952,6 +1350,14 @@ export default function Investigations() {
                   ) : (
                     filteredInvestigations.map((investigation) => (
                       <TableRow key={investigation.id}>
+                        <TableCell>
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 cursor-pointer"
+                            checked={selectedInvestigations.has(investigation.id)}
+                            onChange={() => handleSelectInvestigation(investigation.id)}
+                          />
+                        </TableCell>
                         <TableCell className="font-medium">
                           {investigation.assigned_to?.full_name || "—"}
                         </TableCell>
@@ -992,6 +1398,156 @@ export default function Investigations() {
                         </TableCell>
                       </TableRow>
                     ))
+                  )}
+                </TableBody>
+              </Table>
+            ) : (
+              // Checkup View - Shows all health checkups from all employees
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12">
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 cursor-pointer"
+                        checked={healthCheckups.length > 0 && selectedCheckups.size === healthCheckups.length}
+                        onChange={handleSelectAllCheckups}
+                      />
+                    </TableHead>
+                    <TableHead>{t("common.employee")}</TableHead>
+                    <TableHead>Employee Number</TableHead>
+                    <TableHead>Investigation Name</TableHead>
+                    <TableHead>{t("common.department")}</TableHead>
+                    <TableHead>Appointment Date</TableHead>
+                    <TableHead>{t("common.status")}</TableHead>
+                    <TableHead>Notes</TableHead>
+                    <TableHead className="text-right">
+                      {t("common.actions")}
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {healthCheckups.length === 0 ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={9}
+                        className="text-center py-8 text-muted-foreground"
+                      >
+                        No health checkups found
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    healthCheckups
+                      .filter((checkup: any) => {
+                        const matchesSearch =
+                          checkup.employee?.full_name
+                            ?.toLowerCase()
+                            .includes(searchTerm.toLowerCase()) ||
+                          checkup.employee?.employee_number
+                            ?.toLowerCase()
+                            .includes(searchTerm.toLowerCase()) ||
+                          checkup.investigation_name
+                            ?.toLowerCase()
+                            .includes(searchTerm.toLowerCase());
+
+                        const matchesDepartment =
+                          filterDepartment === "all" ||
+                          checkup.employee?.departments?.name ===
+                            filterDepartment;
+
+                        const matchesGroup =
+                          filterGroup === "all" ||
+                          checkup.employee?.exposure_groups?.name ===
+                            filterGroup;
+
+                        const matchesStatus =
+                          filterCheckUpType === "all" ||
+                          checkup.status === filterCheckUpType ||
+                          (filterCheckUpType === "completed" &&
+                            checkup.status === "done") ||
+                          (filterCheckUpType === "planned" &&
+                            (checkup.status === "open" ||
+                              checkup.status === "planned"));
+
+                        return (
+                          matchesSearch &&
+                          matchesDepartment &&
+                          matchesGroup &&
+                          matchesStatus
+                        );
+                      })
+                      .map((checkup: any) => {
+                        const getCheckupStatusBadge = (
+                          status: string,
+                          completionDate?: string
+                        ) => {
+                          if (status === "done" || completionDate) {
+                            return <Badge className="bg-green-500">Done</Badge>;
+                          }
+                          if (status === "planned") {
+                            return (
+                              <Badge className="bg-blue-500">Planned</Badge>
+                            );
+                          }
+                          return <Badge variant="outline">Open</Badge>;
+                        };
+
+                        return (
+                          <TableRow key={checkup.id}>
+                            <TableCell>
+                              <input
+                                type="checkbox"
+                                className="w-4 h-4 cursor-pointer"
+                                checked={selectedCheckups.has(checkup.id)}
+                                onChange={() => handleSelectCheckup(checkup.id)}
+                              />
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              {checkup.employee?.full_name || "—"}
+                            </TableCell>
+                            <TableCell>
+                              {checkup.employee?.employee_number || "—"}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline">
+                                {checkup.investigation_name || "—"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              {checkup.employee?.departments?.name || "—"}
+                            </TableCell>
+                            <TableCell>
+                              {checkup.appointment_date
+                                ? format(
+                                    new Date(checkup.appointment_date),
+                                    "dd.MM.yyyy"
+                                  )
+                                : "—"}
+                            </TableCell>
+                            <TableCell>
+                              {getCheckupStatusBadge(
+                                checkup.status,
+                                checkup.completion_date
+                              )}
+                            </TableCell>
+                            <TableCell className="max-w-xs truncate">
+                              {checkup.notes || "—"}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  navigate(`/employees/${checkup.employee_id}`)
+                                }
+                              >
+                                <Edit className="w-4 h-4 mr-1" />
+                                View Profile
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
                   )}
                 </TableBody>
               </Table>

@@ -121,6 +121,10 @@ export default function Employees() {
   const [departments, setDepartments] = useState<any[]>([]);
   const [jobRoles, setJobRoles] = useState<any[]>([]);
 
+  // Bulk delete states
+  const [selectedEmployees, setSelectedEmployees] = useState<Set<string>>(new Set());
+  const [isDeleting, setIsDeleting] = useState(false);
+
   useEffect(() => {
     // Debug logging
     console.log("Employees page - Auth state:", {
@@ -545,6 +549,59 @@ export default function Employees() {
     emp.full_name.toLowerCase().includes(mentionSearch.toLowerCase())
   );
 
+  // Bulk delete handlers
+  const handleSelectAll = () => {
+    if (selectedEmployees.size === filteredEmployees.length) {
+      setSelectedEmployees(new Set());
+    } else {
+      setSelectedEmployees(new Set(filteredEmployees.map(emp => emp.id)));
+    }
+  };
+
+  const handleSelectEmployee = (employeeId: string) => {
+    const newSelected = new Set(selectedEmployees);
+    if (newSelected.has(employeeId)) {
+      newSelected.delete(employeeId);
+    } else {
+      newSelected.add(employeeId);
+    }
+    setSelectedEmployees(newSelected);
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedEmployees.size === 0) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${selectedEmployees.size} employee(s)? This action cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    setIsDeleting(true);
+    try {
+      const { error } = await supabase
+        .from("employees")
+        .delete()
+        .in("id", Array.from(selectedEmployees));
+
+      if (error) throw error;
+
+      toast.success(`Successfully deleted ${selectedEmployees.size} employee(s)`);
+      setSelectedEmployees(new Set());
+      fetchEmployees();
+    } catch (error: any) {
+      console.error("Error deleting employees:", error);
+      
+      // Show detailed error message
+      const errorMessage = error?.message || error?.details || error?.hint || "Failed to delete employees";
+      const errorDetails = error?.code ? ` (Error code: ${error.code})` : "";
+      
+      toast.error(`${errorMessage}${errorDetails}`);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   // Render text with @ mentions as styled badges
   const renderTextWithMentions = (text: string) => {
     const mentionRegex = /(@[^\s@]+(?:\s+[^\s@]+)*?)(?=\s|$|@)/g;
@@ -704,6 +761,16 @@ export default function Employees() {
                 </div>
               </div>
               <div className="flex gap-2">
+                {selectedEmployees.size > 0 && (
+                  <Button
+                    variant="destructive"
+                    onClick={handleBulkDelete}
+                    disabled={isDeleting}
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    {isDeleting ? "Deleting..." : `Delete (${selectedEmployees.size})`}
+                  </Button>
+                )}
                 <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                   <DialogTrigger asChild>
                     <Button>
@@ -992,6 +1059,14 @@ export default function Employees() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-12">
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 cursor-pointer"
+                        checked={filteredEmployees.length > 0 && selectedEmployees.size === filteredEmployees.length}
+                        onChange={handleSelectAll}
+                      />
+                    </TableHead>
                     <TableHead>{t("employees.employeeNumber")}</TableHead>
                     <TableHead>{t("employees.name")}</TableHead>
                     <TableHead>{t("employees.email")}</TableHead>
@@ -1004,7 +1079,7 @@ export default function Employees() {
                 <TableBody>
                   {filteredEmployees.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-12">
+                      <TableCell colSpan={8} className="text-center py-12">
                         <div className="flex flex-col items-center justify-center">
                           <Users className="w-16 h-16 text-muted-foreground/20 mb-4" />
                           <p className="text-lg font-medium text-muted-foreground mb-1">
@@ -1022,6 +1097,14 @@ export default function Employees() {
                         key={employee.id}
                         className="hover:bg-muted/70 transition-all duration-200 border-b border-border/50 hover:shadow-sm group"
                       >
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 cursor-pointer"
+                            checked={selectedEmployees.has(employee.id)}
+                            onChange={() => handleSelectEmployee(employee.id)}
+                          />
+                        </TableCell>
                         <TableCell
                           className="cursor-pointer"
                           onClick={() => navigate(`/employees/${employee.id}`)}

@@ -213,77 +213,95 @@ export default function Dashboard() {
     if (!companyId) return;
 
     try {
-      // Fetch investigation statistics from investigations table
-      const { data, error } = await supabase
-        .from("investigations" as any)
-        .select("id, status")
-        .eq("company_id", companyId);
+      console.log("=== Fetching Investigation Stats ===");
+      console.log("Company ID:", companyId);
+      
+      // Fetch both health checkups and investigations
+      const [checkupsResult, investigationsResult] = await Promise.all([
+        supabase
+          .from("health_checkups")
+          .select("id, status")
+          .eq("company_id", companyId),
+        supabase
+          .from("investigations" as any)
+          .select("id, status")
+          .eq("company_id", companyId)
+      ]);
 
-      if (error) {
-        console.error("Error fetching investigation stats:", error);
-        // Set empty state if error
-        setInvestigationStats([
-          { status: "Open", count: 0, color: "#3b82f6", percent: 0 },
-          { status: "In Progress", count: 0, color: "#f59e0b", percent: 0 },
-          { status: "Completed", count: 0, color: "#10b981", percent: 0 },
-          { status: "Closed", count: 0, color: "#ef4444", percent: 0 },
-        ]);
-        return;
-      }
+      console.log("✅ Health checkups fetched:", checkupsResult.data?.length || 0);
+      console.log("✅ Investigations fetched:", investigationsResult.data?.length || 0);
 
-      // Group by status (investigation_status enum: open, in_progress, completed, closed)
+      // Initialize status counts
       const statusCounts = {
         open: 0,
-        in_progress: 0,
-        completed: 0,
-        closed: 0,
+        planned: 0,
+        due: 0,
+        done: 0,
       };
 
-      data?.forEach((investigation: any) => {
-        if (investigation.status in statusCounts) {
-          statusCounts[investigation.status as keyof typeof statusCounts]++;
+      // Count health checkups (status: open, planned, due, done)
+      checkupsResult.data?.forEach((checkup: any) => {
+        if (checkup.status in statusCounts) {
+          statusCounts[checkup.status as keyof typeof statusCounts]++;
+        }
+      });
+
+      // Count investigations (status: due, planned, completed)
+      // Map investigation statuses to our unified status system
+      investigationsResult.data?.forEach((investigation: any) => {
+        const status = investigation.status;
+        if (status === "due") {
+          statusCounts.due++;
+        } else if (status === "planned") {
+          statusCounts.planned++;
+        } else if (status === "completed") {
+          statusCounts.done++;
         }
       });
 
       const total =
         statusCounts.open +
-        statusCounts.in_progress +
-        statusCounts.completed +
-        statusCounts.closed;
+        statusCounts.planned +
+        statusCounts.due +
+        statusCounts.done;
+        
+      console.log("Combined Status Breakdown:", statusCounts);
+      console.log("Total (Checkups + Investigations):", total);
+      
       setInvestigationStats([
         {
           status: "Open",
           count: statusCounts.open,
-          color: "#3b82f6",
+          color: "#6b7280",
           percent: statusCounts.open / (total || 1),
         },
         {
-          status: "In Progress",
-          count: statusCounts.in_progress,
+          status: "Planned",
+          count: statusCounts.planned,
+          color: "#3b82f6",
+          percent: statusCounts.planned / (total || 1),
+        },
+        {
+          status: "Due",
+          count: statusCounts.due,
           color: "#f59e0b",
-          percent: statusCounts.in_progress / (total || 1),
+          percent: statusCounts.due / (total || 1),
         },
         {
-          status: "Completed",
-          count: statusCounts.completed,
+          status: "Done",
+          count: statusCounts.done,
           color: "#10b981",
-          percent: statusCounts.completed / (total || 1),
-        },
-        {
-          status: "Closed",
-          count: statusCounts.closed,
-          color: "#ef4444",
-          percent: statusCounts.closed / (total || 1),
+          percent: statusCounts.done / (total || 1),
         },
       ]);
     } catch (error) {
       console.error("Error fetching investigation stats:", error);
       // Set empty state on error
       setInvestigationStats([
-        { status: "Open", count: 0, color: "#3b82f6", percent: 0 },
-        { status: "In Progress", count: 0, color: "#f59e0b", percent: 0 },
-        { status: "Completed", count: 0, color: "#10b981", percent: 0 },
-        { status: "Closed", count: 0, color: "#ef4444", percent: 0 },
+        { status: "Open", count: 0, color: "#6b7280", percent: 0 },
+        { status: "Planned", count: 0, color: "#3b82f6", percent: 0 },
+        { status: "Due", count: 0, color: "#f59e0b", percent: 0 },
+        { status: "Done", count: 0, color: "#10b981", percent: 0 },
       ]);
     }
   };
@@ -477,10 +495,7 @@ export default function Dashboard() {
                 <div className="text-5xl font-bold text-white mb-1 tracking-tight">
                   {stats.employees}
                 </div>
-                <p className="text-sm text-blue-100 mt-3 flex items-center gap-1.5 font-medium">
-                  <span className="text-base">📈</span>
-                  <span>{t("dashboard.thisMonth")}</span>
-                </p>
+
               </CardContent>
             </Card>
 
@@ -498,9 +513,7 @@ export default function Dashboard() {
                 <div className="text-5xl font-bold text-white mb-1 tracking-tight">
                   {stats.overdueObligations}
                 </div>
-                <p className="text-sm text-red-100 mt-3 font-medium">
-                  <span>{t("dashboard.needsAttention")}</span>
-                </p>
+
               </CardContent>
             </Card>
 
@@ -530,9 +543,7 @@ export default function Dashboard() {
                 <div className="text-5xl font-bold text-white mb-1 tracking-tight">
                   {stats.recentIncidents}
                 </div>
-                <p className="text-sm text-amber-100 mt-3 font-medium">
-                  <span>{t("dashboard.newReports")}</span>
-                </p>
+
               </CardContent>
             </Card>
 
@@ -550,9 +561,7 @@ export default function Dashboard() {
                 <div className="text-5xl font-bold text-white mb-1 tracking-tight">
                   {stats.recentHazards}
                 </div>
-                <p className="text-sm text-green-100 mt-3 font-medium">
-                  <span>{t("dashboard.newReports")}</span>
-                </p>
+
               </CardContent>
             </Card>
           </div>
@@ -620,13 +629,7 @@ export default function Dashboard() {
                           ];
                         }}
                       />
-                      <Legend
-                        verticalAlign="bottom"
-                        height={36}
-                        formatter={(value, entry: any) => {
-                          return `${entry.payload.status}: ${entry.payload.count}`;
-                        }}
-                      />
+
                     </PieChart>
                   </ResponsiveContainer>
                 )}

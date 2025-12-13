@@ -16,6 +16,7 @@ import {
   Save,
   Grid3x3,
   FileDown,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -56,6 +57,9 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
+
 
 // Types
 type Risk = any;
@@ -123,6 +127,62 @@ const DAMAGE_EXTENT_LABELS = [
   { value: 4, de: "Hoch", en: "High" },
   { value: 5, de: "Sehr hoch", en: "Very High" },
 ];
+
+
+// Print styles for PDF export
+const printStyles = `
+  @media print {
+    /* Force all colors to print */
+    * {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      color-adjust: exact !important;
+    }
+    
+    /* Hide everything except dialog */
+    body > *:not([data-radix-portal]) {
+      display: none !important;
+    }
+    
+    /* Show dialog portal */
+    [data-radix-portal] {
+      display: block !important;
+    }
+    
+    /* Hide overlay */
+    [data-radix-dialog-overlay] {
+      display: none !important;
+    }
+    
+    /* Position dialog for print */
+    [role="dialog"] {
+      position: static !important;
+      transform: none !important;
+      max-width: 100% !important;
+      width: 100% !important;
+      margin: 0 !important;
+      padding: 20px !important;
+      box-shadow: none !important;
+    }
+    
+    /* Hide Export PDF button when printing */
+    button:has(svg):not(.print-keep) {
+      display: none !important;
+    }
+    
+    /* Ensure risk matrix colors are preserved */
+    [style*="background"] {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    
+    /* Page setup */
+    @page {
+      margin: 1.5cm;
+      size: A4 landscape;
+    }
+  }
+`;
 
 export default function RiskAssessments() {
   const { user, loading, companyId } = useAuth();
@@ -200,10 +260,10 @@ export default function RiskAssessments() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, loading, navigate, companyId]);
 
-  const fetchData = async () => {
+  const fetchData = async (showLoading = true) => {
     if (!companyId) return;
 
-    setLoadingData(true);
+    if (showLoading) setLoadingData(true);
     try {
       const [
         risksRes,
@@ -235,10 +295,11 @@ export default function RiskAssessments() {
           .eq("company_id", companyId)
           .order("name"),
         supabase
-          .from("employees")
-          .select("id, full_name")
+          .from("team_members")
+          .select("id, first_name, last_name, email, role")
           .eq("company_id", companyId)
-          .order("full_name"),
+          .eq("role", "Line Manager")
+          .order("first_name"),
       ]);
 
       if (risksRes.error) throw risksRes.error;
@@ -266,7 +327,12 @@ export default function RiskAssessments() {
       setLocations(locationsRes.data || []);
       setDepartments(departmentsRes.data || []);
       setExposureGroups(exposureGroupsRes.data || []);
-      setEmployees(employeesRes.data || []);
+      
+      // Map team members to Employee format: show name and email
+      setEmployees((employeesRes.data || []).map((tm: any) => ({
+        id: tm.id,
+        full_name: `${tm.first_name} ${tm.last_name} (${tm.email})`,
+      })));
     } catch (err: unknown) {
       const e = err as { message?: string } | Error | null;
       const message =
@@ -344,22 +410,21 @@ export default function RiskAssessments() {
       }
 
       // Insert measures
-      if (
-        created &&
-        measures.length > 0 &&
-        measures[0].measure_building_block
-      ) {
-        const measuresData = measures
-          .filter((m) => m.measure_building_block)
-          .map((m) => ({
-            risk_assessment_id: created.id,
-            company_id: companyId,
-            measure_building_block: m.measure_building_block,
-            responsible_person: m.responsible_person || null,
-            due_date: m.due_date || null,
-            progress_status: m.progress_status || "not_started",
-            notes: m.notes || null,
-          }));
+      const validMeasures = measures.filter((m) => m.measure_building_block);
+      console.log("Valid measures to insert:", validMeasures);
+      
+      if (created && validMeasures.length > 0) {
+        const measuresData = validMeasures.map((m) => ({
+          risk_assessment_id: created.id,
+          company_id: companyId,
+          measure_building_block: m.measure_building_block,
+          responsible_person: m.responsible_person || null,
+          due_date: m.due_date || null,
+          progress_status: m.progress_status || "not_started",
+          notes: m.notes || null,
+        }));
+
+        console.log("Measures data to insert:", measuresData);
 
         const { error: measuresError } = await supabase
           .from("risk_assessment_measures")
@@ -373,7 +438,11 @@ export default function RiskAssessments() {
               "Risk assessment created but some measures failed to save.",
             variant: "destructive",
           });
+        } else {
+          console.log("Measures inserted successfully");
         }
+      } else {
+        console.log("No valid measures to insert");
       }
 
       toast({
@@ -425,6 +494,18 @@ export default function RiskAssessments() {
     ]);
     setUploadedDocuments([]);
   };
+
+  // Calculate progress based on measure statuses
+  const calculateProgress = (measures: Measure[]) => {
+    if (!measures || measures.length === 0) return 0;
+    
+    const completedCount = measures.filter(
+      (m) => m.progress_status === "completed" || m.progress_status === "done"
+    ).length;
+    
+    return Math.round((completedCount / measures.length) * 100);
+  };
+
 
   const filteredRisks = risks.filter((risk) =>
     risk.title.toLowerCase().includes(searchTerm.toLowerCase())
@@ -533,7 +614,6 @@ export default function RiskAssessments() {
               </div>
               <div className="flex gap-2 flex-wrap">
                 <Button
-                  variant="outline"
                   className="whitespace-nowrap"
                   onClick={() => {
                     toast({
@@ -1427,9 +1507,6 @@ export default function RiskAssessments() {
                         : "Risk Before/After"}
                     </TableHead>
                     <TableHead>Matrix</TableHead>
-                    <TableHead>
-                      {language === "de" ? "Fortschritt" : "Progress"}
-                    </TableHead>
                     <TableHead className="whitespace-nowrap">
                       {language === "de" ? "Genehmigung" : "Approval"}
                     </TableHead>
@@ -1437,6 +1514,9 @@ export default function RiskAssessments() {
                       {language === "de"
                         ? "Bewertungsdatum"
                         : "Assessment Date"}
+                    </TableHead>
+                    <TableHead className="whitespace-nowrap">
+                      {language === "de" ? "Aktionen" : "Actions"}
                     </TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1509,34 +1589,100 @@ export default function RiskAssessments() {
                           </Button>
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Progress
-                              value={risk.progress || 0}
-                              className="w-16 h-2"
-                            />
-                            <span className="text-xs text-muted-foreground">
-                              {risk.progress || 0}%
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={
-                              risk.approval_status === "approved"
-                                ? "default"
-                                : risk.approval_status === "pending_approval"
-                                ? "secondary"
-                                : "outline"
-                            }
-                            className="text-xs"
-                          >
-                            {risk.approval_status === "approved" && (
-                              <Check className="w-3 h-3 mr-1" />
-                            )}
-                            {risk.approval_status || "draft"}
-                          </Badge>
+                          {risk.measures && risk.measures.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {risk.measures.map((measure, idx) => {
+                                const statusConfig = {
+                                  without_due_date: { label: "no due date", color: "bg-gray-500" },
+                                  done: { label: "done", color: "bg-yellow-500" },
+                                  open: { label: "open", color: "bg-blue-400" },
+                                  in_progress: { label: "in progress", color: "bg-teal-500" },
+                                  completed: { label: "completed", color: "bg-green-500" },
+                                  not_started: { label: "not started", color: "bg-gray-400" },
+                                };
+                                const status = measure.progress_status || "not_started";
+                                const config = statusConfig[status] || { label: status, color: "bg-gray-500" };
+                                return (
+                                  <span
+                                    key={measure.id || idx}
+                                    className={`${config.color} text-white text-xs px-2 py-0.5 rounded`}
+                                  >
+                                    {config.label}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">-</span>
+                          )}
                         </TableCell>
                         <TableCell>{risk.assessment_date}</TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={async () => {
+                              if (confirm(
+                                language === "de"
+                                  ? `Möchten Sie die Risikobewertung "${risk.title}" wirklich löschen?`
+                                  : `Are you sure you want to delete the risk assessment "${risk.title}"?`
+                              )) {
+                                try {
+                                  // Delete associated measures first
+                                  if (risk.measures && risk.measures.length > 0) {
+                                    const { error: measuresError } = await supabase
+                                      .from("risk_assessment_measures")
+                                      .delete()
+                                      .eq("risk_assessment_id", risk.id);
+
+                                    if (measuresError) {
+                                      console.error("Error deleting measures:", measuresError);
+                                    }
+                                  }
+
+                                  // Delete the risk assessment
+                                  const { error } = await supabase
+                                    .from("risk_assessments")
+                                    .delete()
+                                    .eq("id", risk.id);
+
+                                  if (error) {
+                                    toast({
+                                      title: language === "de" ? "Fehler" : "Error",
+                                      description:
+                                        language === "de"
+                                          ? "Risikobewertung konnte nicht gelöscht werden"
+                                          : "Failed to delete risk assessment",
+                                      variant: "destructive",
+                                    });
+                                  } else {
+                                    toast({
+                                      title: language === "de" ? "Erfolg" : "Success",
+                                      description:
+                                        language === "de"
+                                          ? "Risikobewertung erfolgreich gelöscht"
+                                          : "Risk assessment deleted successfully",
+                                    });
+                                    fetchData();
+                                  }
+                                } catch (err) {
+                                  console.error("Error deleting risk assessment:", err);
+                                  toast({
+                                    title: language === "de" ? "Fehler" : "Error",
+                                    description:
+                                      language === "de"
+                                        ? "Ein Fehler ist aufgetreten"
+                                        : "An error occurred",
+                                    variant: "destructive",
+                                  });
+                                }
+                              }
+                            }}
+                            className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))
                   )}
@@ -1556,472 +1702,573 @@ export default function RiskAssessments() {
             }
           }}
         >
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <DialogTitle>Risk Matrix - {selectedRisk?.title}</DialogTitle>
-                  <DialogDescription>
-                    Step-by-step: Analysis, Assessment, Measures, Revision
+                  <DialogTitle className="text-xl">
+                    Risk Matrix - {selectedRisk?.title}
+                  </DialogTitle>
+                  <DialogDescription className="text-sm mt-1">
+                    {language === "de"
+                      ? "Schritt-für-Schritt: Analyse, Bewertung, Maßnahmen, Revision"
+                      : "Step-by-step: Analysis, Assessment, Measures, Revision"}
                   </DialogDescription>
                 </div>
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => {
+                  onClick={async () => {
                     toast({
-                      title: "Export PDF",
-                      description: "Generating PDF report...",
+                      title:
+                        language === "de" ? "PDF exportieren" : "Export PDF",
+                      description:
+                        language === "de"
+                          ? "PDF-Bericht wird erstellt..."
+                          : "Generating PDF report...",
                     });
-                    // TODO: Implement actual PDF export functionality
-                    window.print();
+
+                    try {
+                      // Find the dialog content element
+                      const dialogElement = document.querySelector('[role="dialog"]') as HTMLElement;
+                      
+                      if (!dialogElement) {
+                        throw new Error("Dialog not found");
+                      }
+
+                      // Store original styles
+                      const originalOverflow = dialogElement.style.overflow;
+                      const originalMaxHeight = dialogElement.style.maxHeight;
+                      const originalMaxWidth = dialogElement.style.maxWidth;
+                      
+                      // Temporarily remove overflow restrictions
+                      dialogElement.style.overflow = 'visible';
+                      dialogElement.style.maxHeight = 'none';
+                      dialogElement.style.maxWidth = 'none';
+
+                      // Wait a bit for layout to settle
+                      await new Promise(resolve => setTimeout(resolve, 100));
+
+                      // Capture the dialog as canvas
+                      const canvas = await html2canvas(dialogElement, {
+                        scale: 2,
+                        useCORS: true,
+                        logging: true,
+                        backgroundColor: '#ffffff',
+                        width: dialogElement.scrollWidth,
+                        height: dialogElement.scrollHeight,
+                      });
+
+                      // Restore original styles
+                      dialogElement.style.overflow = originalOverflow;
+                      dialogElement.style.maxHeight = originalMaxHeight;
+                      dialogElement.style.maxWidth = originalMaxWidth;
+
+                      // Create PDF
+                      const imgData = canvas.toDataURL('image/png');
+                      const pdf = new jsPDF({
+                        orientation: 'landscape',
+                        unit: 'mm',
+                        format: 'a4',
+                      });
+
+                      // Calculate dimensions to fit image in PDF
+                      const pdfWidth = pdf.internal.pageSize.getWidth();
+                      const pdfHeight = pdf.internal.pageSize.getHeight();
+                      const imgWidth = canvas.width;
+                      const imgHeight = canvas.height;
+                      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+                      const imgX = (pdfWidth - imgWidth * ratio) / 2;
+                      const imgY = 10;
+
+                      pdf.addImage(
+                        imgData,
+                        'PNG',
+                        imgX,
+                        imgY,
+                        imgWidth * ratio,
+                        imgHeight * ratio
+                      );
+
+                      // Open PDF in new tab for preview
+                      const pdfBlob = pdf.output('blob');
+                      const pdfUrl = URL.createObjectURL(pdfBlob);
+                      window.open(pdfUrl, '_blank');
+
+                      toast({
+                        title: language === "de" ? "Erfolg" : "Success",
+                        description:
+                          language === "de"
+                            ? "PDF erfolgreich erstellt"
+                            : "PDF generated successfully",
+                      });
+                    } catch (error) {
+                      console.error('PDF generation error:', error);
+                      toast({
+                        title: language === "de" ? "Fehler" : "Error",
+                        description:
+                          language === "de"
+                            ? "PDF konnte nicht erstellt werden"
+                            : "Failed to generate PDF",
+                        variant: "destructive",
+                      });
+                    }
                   }}
                 >
                   <FileDown className="w-4 h-4 mr-2" />
-                  Export PDF
+                  {language === "de" ? "PDF Export" : "Export PDF"}
                 </Button>
               </div>
             </DialogHeader>
 
             {selectedRisk && (
-              <div className="space-y-6">
-                {/* The Progress of Measures */}
-                <div className="p-4 border rounded-lg bg-muted/30">
-                  <div className="flex items-center justify-between mb-2">
+              <>
+                {/* Progress Bar */}
+                <div className="mt-4 mb-6">
+                  <div className="flex items-center justify-between text-sm mb-2">
+                    <span className="font-medium">Implementation</span>
                     <span className="font-medium">
-                      The progress of measures
+                      {selectedRisk.measures?.filter((m) => m.progress_status === "completed" || m.progress_status === "done").length || 0}/
+                      {selectedRisk.measures?.length || 0} ({calculateProgress(selectedRisk.measures || [])}%)
                     </span>
-                    <Progress
-                      value={
-                        selectedRisk.measures &&
-                        selectedRisk.measures.length > 0
-                          ? (selectedRisk.measures.filter(
-                              (m: any) => m.progress_status === "completed"
-                            ).length /
-                              selectedRisk.measures.length) *
-                            100
-                          : 0
-                      }
-                      className="w-32 h-2"
-                    />
                   </div>
-                  <span className="text-sm text-muted-foreground">
-                    {selectedRisk.measures && selectedRisk.measures.length > 0
-                      ? `${
-                          selectedRisk.measures.filter(
-                            (m: any) => m.progress_status === "completed"
-                          ).length
-                        } of ${
-                          selectedRisk.measures.length
-                        } measures completed (${Math.round(
-                          (selectedRisk.measures.filter(
-                            (m: any) => m.progress_status === "completed"
-                          ).length /
-                            selectedRisk.measures.length) *
-                            100
-                        )}%)`
-                      : "No measures defined"}
-                  </span>
+                  <Progress value={calculateProgress(selectedRisk.measures || [])} className="h-2" />
                 </div>
 
-                {/* Risk Matrices */}
-                <div className="grid grid-cols-2 gap-6">
-                  {/* Before Mitigation */}
-                  <div>
-                    <h4 className="font-semibold mb-3">
-                      PRIMA (before Mitigation)
-                    </h4>
-                    <div className="space-y-2 mb-3 text-sm">
-                      <div>
-                        P x Schadensausmaß | X = Eintrittswahrscheinlichkeit
-                      </div>
-                      <div className="font-medium">
-                        Harm: PRIMA P:{selectedRisk.probability_before || 0} |
-                        POST P:{selectedRisk.probability_after || 0}
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-5 gap-1">
-                      {[5, 4, 3, 2, 1].map((prob) => (
-                        <div key={`before-${prob}`} className="contents">
-                          {[1, 2, 3, 4, 5].map((damage) => {
-                            const score = prob * damage;
-                            const isSelected =
-                              prob === selectedRisk.probability_before &&
-                              damage === selectedRisk.extent_damage_before;
-                            return (
-                              <div
-                                key={`${prob}-${damage}`}
-                                className={`aspect-square flex items-center justify-center text-xs font-medium ${
-                                  score >= 15
-                                    ? "bg-red-500 text-white"
-                                    : score >= 8
-                                    ? "bg-orange-400 text-white"
-                                    : score >= 4
-                                    ? "bg-yellow-400 text-black"
-                                    : "bg-green-400 text-black"
-                                } ${isSelected ? "ring-4 ring-blue-500" : ""}`}
-                              >
-                                {isSelected && "●"}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ))}
-                    </div>
-                    <div className="flex justify-between mt-2 text-xs">
-                      <span>Y = Schadensausmaß</span>
-                    </div>
-                  </div>
-
-                  {/* After Mitigation */}
-                  <div>
-                    <h4 className="font-semibold mb-3">
-                      POST (after Mitigation)
-                    </h4>
-                    <div className="space-y-2 mb-3 text-sm">
-                      <div>
-                        P x Schadensausmaß | X = Eintrittswahrscheinlichkeit
-                      </div>
-                      <div className="font-medium">
-                        Harm: PRIMA P:{selectedRisk.probability_before || 0} |
-                        POST P:{selectedRisk.probability_after || 0}
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-5 gap-1">
-                      {[5, 4, 3, 2, 1].map((prob) => (
-                        <div key={`after-${prob}`} className="contents">
-                          {[1, 2, 3, 4, 5].map((damage) => {
-                            const score = prob * damage;
-                            const isSelected =
-                              prob === selectedRisk.probability_after &&
-                              damage === selectedRisk.extent_damage_after;
-                            return (
-                              <div
-                                key={`${prob}-${damage}`}
-                                className={`aspect-square flex items-center justify-center text-xs font-medium ${
-                                  score >= 15
-                                    ? "bg-red-500 text-white"
-                                    : score >= 8
-                                    ? "bg-orange-400 text-white"
-                                    : score >= 4
-                                    ? "bg-yellow-400 text-black"
-                                    : "bg-green-400 text-black"
-                                } ${isSelected ? "ring-4 ring-blue-500" : ""}`}
-                              >
-                                {isSelected && "●"}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Risk Legend */}
-                <div className="flex gap-4 text-xs">
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 bg-green-400"></div>
-                    <span>Low</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 bg-yellow-400"></div>
-                    <span>Medium</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 bg-orange-400"></div>
-                    <span>High</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 bg-red-500"></div>
-                    <span>Critical</span>
-                  </div>
-                </div>
-
-                {/* Hazards Section */}
-                <div className="space-y-2">
-                  <h4 className="font-semibold">Hazards</h4>
-                  <div className="p-3 border rounded bg-muted/20">
-                    <div className="text-sm">
-                      <span className="font-medium">Category: </span>
-                      {selectedRisk.hazard_category}
-                    </div>
-                    {selectedRisk.description && (
-                      <div className="mt-2 text-sm text-muted-foreground">
-                        {selectedRisk.description}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Notes Section - Editable */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-semibold">Notes</h4>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={async () => {
-                        if (!selectedRisk) return;
-                        const { error } = await supabase
-                          .from("risk_assessments")
-                          .update({ notes: editableNotes })
-                          .eq("id", selectedRisk.id);
-
-                        if (error) {
-                          toast({
-                            title: "Error",
-                            description: "Failed to save notes",
-                            variant: "destructive",
-                          });
-                        } else {
-                          toast({
-                            title: "Success",
-                            description: "Notes saved successfully",
-                          });
-                          fetchData();
-                        }
-                      }}
-                    >
-                      <Save className="w-4 h-4 mr-2" />
-                      Save Notes
-                    </Button>
-                  </div>
-                  <Textarea
-                    placeholder="Add notes about this risk assessment..."
-                    value={editableNotes}
-                    onChange={(e) => setEditableNotes(e.target.value)}
-                    rows={4}
-                    className="w-full"
-                  />
-                </div>
-
-                {/* Measures Section */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-semibold">Measures for this Risk</h4>
-                    <Badge variant="secondary" className="text-xs">
-                      {selectedRisk.measures?.length || 0} Measure
-                      {selectedRisk.measures?.length !== 1 ? "s" : ""}
-                    </Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    Track implementation progress of control measures. Update
-                    status to monitor completion.
-                  </p>
-
-                  <div className="space-y-3">
-                    {selectedRisk.measures &&
-                    selectedRisk.measures.length > 0 ? (
-                      selectedRisk.measures.map(
-                        (measure: any, index: number) => (
-                          <div
-                            key={index}
-                            className="p-4 border rounded-lg bg-gradient-to-br from-background to-muted/20 hover:shadow-md transition-all"
-                          >
-                            {/* Header with Measure Type and Status Badge */}
-                            <div className="flex items-start justify-between mb-3 gap-2">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <Badge
-                                    variant="outline"
-                                    className="text-xs font-normal"
-                                  >
-                                    #{index + 1}
-                                  </Badge>
-                                  <span className="font-semibold text-sm">
-                                    {measure.measure_building_block}
-                                  </span>
-                                </div>
-                              </div>
-                              <Badge
-                                variant={
-                                  measure.progress_status === "completed"
-                                    ? "default"
-                                    : measure.progress_status === "in_progress"
-                                    ? "secondary"
-                                    : "outline"
-                                }
-                                className="text-xs shrink-0"
-                              >
-                                {measure.progress_status === "completed" &&
-                                  "✓ "}
-                                {measure.progress_status === "not_started" &&
-                                  "○ "}
-                                {measure.progress_status === "in_progress" &&
-                                  "◐ "}
-                                {measure.progress_status === "completed"
-                                  ? "Completed"
-                                  : measure.progress_status === "in_progress"
-                                  ? "In Progress"
-                                  : "Not Started"}
-                              </Badge>
-                            </div>
-
-                            {/* Progress Status Buttons */}
-                            <div className="flex gap-2 mb-3 flex-wrap">
-                              <Button
-                                size="sm"
-                                variant={
-                                  measure.progress_status === "not_started"
-                                    ? "default"
-                                    : "outline"
-                                }
-                                className="text-xs h-8"
-                                onClick={async () => {
-                                  const { error } = await supabase
-                                    .from("risk_assessment_measures")
-                                    .update({ progress_status: "not_started" })
-                                    .eq("id", measure.id);
-                                  if (!error) {
-                                    toast({
-                                      title: "Status updated",
-                                      description:
-                                        "Measure marked as Not Started",
-                                    });
-                                    fetchData();
-                                  }
-                                }}
-                              >
-                                ○ Offen
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant={
-                                  measure.progress_status === "in_progress"
-                                    ? "default"
-                                    : "outline"
-                                }
-                                className="text-xs h-8"
-                                onClick={async () => {
-                                  const { error } = await supabase
-                                    .from("risk_assessment_measures")
-                                    .update({ progress_status: "in_progress" })
-                                    .eq("id", measure.id);
-                                  if (!error) {
-                                    toast({
-                                      title: "Status updated",
-                                      description:
-                                        "Measure marked as In Progress",
-                                    });
-                                    fetchData();
-                                  }
-                                }}
-                              >
-                                ◐ In Arbeit
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant={
-                                  measure.progress_status === "completed"
-                                    ? "default"
-                                    : "outline"
-                                }
-                                className="text-xs h-8"
-                                onClick={async () => {
-                                  const { error } = await supabase
-                                    .from("risk_assessment_measures")
-                                    .update({ progress_status: "completed" })
-                                    .eq("id", measure.id);
-                                  if (!error) {
-                                    toast({
-                                      title: "Status updated",
-                                      description:
-                                        "Measure marked as Completed",
-                                    });
-                                    fetchData();
-                                  }
-                                }}
-                              >
-                                ✓ Erledigt
-                              </Button>
-                            </div>
-
-                            {/* Measure Details Grid */}
-                            <div className="grid grid-cols-2 gap-3 text-xs mb-3 p-3 bg-muted/30 rounded border">
-                              <div>
-                                <span className="font-medium text-muted-foreground">
-                                  Responsible:
-                                </span>
-                                <div className="mt-1 font-medium">
-                                  {measure.employees?.full_name ||
-                                    measure.responsible_person_name ||
-                                    measure.responsible_person ||
-                                    "Not assigned"}
-                                </div>
-                              </div>
-                              <div>
-                                <span className="font-medium text-muted-foreground">
-                                  Due Date:
-                                </span>
-                                <div className="mt-1 font-medium">
-                                  {measure.due_date
-                                    ? new Date(
-                                        measure.due_date
-                                      ).toLocaleDateString()
-                                    : "No deadline"}
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Notes Section */}
-                            {measure.notes && (
-                              <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 rounded">
-                                <div className="flex items-start gap-2">
-                                  <Info className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
-                                  <div className="flex-1">
-                                    <span className="font-medium text-xs text-blue-900 dark:text-blue-100">
-                                      Notes:
-                                    </span>
-                                    <p className="text-xs text-blue-800 dark:text-blue-200 mt-1">
-                                      {measure.notes}
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                          </div>
+                <div className="flex flex-row gap-8 mt-6 overflow-x-auto pb-4">
+                  {/* PRIMA (Before Mitigation) */}
+                  <div className="space-y-3 min-w-[350px] flex-shrink-0">
+                    <div className="bg-background p-3 rounded-lg border-2">
+                      <h4 className="font-semibold text-base mb-1">
+                        PRIMA (
+                        {language === "de"
+                          ? "vor Maßnahmen"
+                          : "before measures"}
                         )
-                      )
-                    ) : (
-                      <div className="text-center py-8 border-2 border-dashed rounded-lg bg-muted/10">
-                        <AlertOctagon className="w-12 h-12 mx-auto text-muted-foreground/30 mb-3" />
-                        <p className="text-sm font-medium text-muted-foreground mb-1">
-                          No measures defined yet
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Measures are added when creating the risk assessment
-                        </p>
+                      </h4>
+                      <div className="text-xs text-muted-foreground">
+                        Y ={" "}
+                        {language === "de"
+                          ? "Schwere des Schadens"
+                          : "Severity of Damage"}{" "}
+                        X ={" "}
+                        {language === "de"
+                          ? "Eintrittswahrscheinlichkeit"
+                          : "Probability of Occurrence"}
                       </div>
-                    )}
+                    </div>
+
+                    {/* Matrix Grid with Axis Labels */}
+                    <div className="relative">
+                      {/* Y-axis values */}
+                      <div className="flex gap-2">
+                        <div className="flex flex-col justify-between text-xs font-semibold pr-2 py-1">
+                          <div className="h-14 flex items-center justify-center">
+                            6
+                          </div>
+                          <div className="h-14 flex items-center justify-center">
+                            5
+                          </div>
+                          <div className="h-14 flex items-center justify-center">
+                            4
+                          </div>
+                          <div className="h-14 flex items-center justify-center">
+                            3
+                          </div>
+                          <div className="h-14 flex items-center justify-center">
+                            2
+                          </div>
+                          <div className="h-14 flex items-center justify-center">
+                            1
+                          </div>
+                        </div>
+
+                        {/* Matrix */}
+                        <div className="flex-1">
+                          <div className="grid grid-cols-6 gap-1">
+                            {[6, 5, 4, 3, 2, 1].map((prob) => (
+                              <div key={`before-${prob}`} className="contents">
+                                {[1, 2, 3, 4, 5, 6].map((damage) => {
+                                  const score = prob * damage;
+                                  const isSelected =
+                                    prob === selectedRisk.probability_before &&
+                                    damage ===
+                                      selectedRisk.extent_damage_before;
+
+                                  let bgColor = "bg-green-500";
+                                  if (score >= 20) bgColor = "bg-red-500";
+                                  else if (score >= 12)
+                                    bgColor = "bg-orange-500";
+                                  else if (score >= 6)
+                                    bgColor = "bg-yellow-400";
+
+                                  return (
+                                    <div
+                                      key={`${prob}-${damage}`}
+                                      className={`h-14 flex items-center justify-center text-lg font-bold transition-all ${bgColor} ${
+                                        isSelected
+                                          ? "ring-4 ring-cyan-500 z-10"
+                                          : ""
+                                      }`}
+                                    >
+                                      {isSelected && (
+                                        <div className="w-4 h-4 bg-cyan-500 rounded-full border-2 border-white"></div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* X-axis values */}
+                          <div className="grid grid-cols-6 gap-1 mt-2">
+                            {[1, 2, 3, 4, 5, 6].map((val) => (
+                              <div
+                                key={val}
+                                className="text-center text-xs font-semibold h-6 flex items-center justify-center"
+                              >
+                                {val}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* POST (After Mitigation) */}
+                  <div className="space-y-3 min-w-[350px] flex-shrink-0">
+                    <div className="bg-background p-3 rounded-lg border-2">
+                      <h4 className="font-semibold text-base mb-1">
+                        POST (
+                        {language === "de"
+                          ? "nach Maßnahmen"
+                          : "after measures"}
+                        )
+                      </h4>
+                      <div className="text-xs text-muted-foreground">
+                        Y ={" "}
+                        {language === "de"
+                          ? "Schwere des Schadens"
+                          : "Severity of Damage"}{" "}
+                        X ={" "}
+                        {language === "de"
+                          ? "Eintrittswahrscheinlichkeit"
+                          : "Probability of Occurrence"}
+                      </div>
+                    </div>
+
+                    {/* Matrix Grid with Axis Labels */}
+                    <div className="relative">
+                      {/* Y-axis values */}
+                      <div className="flex gap-2">
+                        <div className="flex flex-col justify-between text-xs font-semibold pr-2 py-1">
+                          <div className="h-14 flex items-center justify-center">
+                            6
+                          </div>
+                          <div className="h-14 flex items-center justify-center">
+                            5
+                          </div>
+                          <div className="h-14 flex items-center justify-center">
+                            4
+                          </div>
+                          <div className="h-14 flex items-center justify-center">
+                            3
+                          </div>
+                          <div className="h-14 flex items-center justify-center">
+                            2
+                          </div>
+                          <div className="h-14 flex items-center justify-center">
+                            1
+                          </div>
+                        </div>
+
+                        {/* Matrix */}
+                        <div className="flex-1">
+                          <div className="grid grid-cols-6 gap-1">
+                            {[6, 5, 4, 3, 2, 1].map((prob) => (
+                              <div key={`after-${prob}`} className="contents">
+                                {[1, 2, 3, 4, 5, 6].map((damage) => {
+                                  const score = prob * damage;
+                                  const isSelected =
+                                    prob === selectedRisk.probability_after &&
+                                    damage === selectedRisk.extent_damage_after;
+
+                                  let bgColor = "bg-green-500";
+                                  if (score >= 20) bgColor = "bg-red-500";
+                                  else if (score >= 12)
+                                    bgColor = "bg-orange-500";
+                                  else if (score >= 6)
+                                    bgColor = "bg-yellow-400";
+
+                                  return (
+                                    <div
+                                      key={`${prob}-${damage}`}
+                                      className={`h-14 flex items-center justify-center text-lg font-bold transition-all ${bgColor} ${
+                                        isSelected
+                                          ? "ring-4 ring-cyan-500 z-10"
+                                          : ""
+                                      }`}
+                                    >
+                                      {isSelected && (
+                                        <div className="w-4 h-4 bg-cyan-500 rounded-full border-2 border-white"></div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* X-axis values */}
+                          <div className="grid grid-cols-6 gap-1 mt-2">
+                            {[1, 2, 3, 4, 5, 6].map((val) => (
+                              <div
+                                key={val}
+                                className="text-center text-xs font-semibold h-6 flex items-center justify-center"
+                              >
+                                {val}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Risks Section */}
+                  <div className="flex flex-col gap-4 min-w-[350px] flex-1">
+                    <div className="bg-background p-4 rounded-lg border-2">
+                      <h4 className="font-semibold text-base mb-3">
+                        {language === "de" ? "Risiken" : "Risks"}
+                      </h4>
+
+                      <div className="space-y-3">
+                        {/* Risk Title with PRIMA/POST */}
+                        <div className="font-medium text-sm mb-3">
+                          {selectedRisk?.title} – <span className="text-blue-600">PRIMA P:{selectedRisk.probability_before || 0}/S:{selectedRisk.extent_damage_before || 0}</span> | <span className="text-green-600">POST P:{selectedRisk.probability_after || 0}/S:{selectedRisk.extent_damage_after || 0}</span>
+                        </div>
+
+                        {/* Measure Checkboxes */}
+                        <div className="flex flex-wrap gap-3 text-xs mb-3">
+                          {selectedRisk?.measures && selectedRisk.measures.length > 0 ? (
+                            selectedRisk.measures.map((measure, idx) => (
+                              <label key={measure.id || idx} className="flex items-center gap-1.5 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  className="rounded"
+                                  checked={measure.progress_status === "completed" || measure.progress_status === "done"}
+                                  onChange={async (e) => {
+                                    e.stopPropagation();
+                                    if (!measure.id) return;
+                                    const newStatus = e.target.checked ? "completed" : "open";
+
+                                    // Optimistic update
+                                    if (selectedRisk) {
+                                      const updatedMeasures = selectedRisk.measures?.map((m) =>
+                                        m.id === measure.id
+                                          ? { ...m, progress_status: newStatus }
+                                          : m
+                                      ) || [];
+                                      setSelectedRisk({
+                                        ...selectedRisk,
+                                        measures: updatedMeasures,
+                                      });
+                                    }
+
+                                    const { error } = await supabase
+                                      .from("risk_assessment_measures")
+                                      .update({ progress_status: newStatus })
+                                      .eq("id", measure.id);
+
+                                    if (!error) {
+                                      fetchData(false);
+                                    } else {
+                                      toast({
+                                        title: language === "de" ? "Fehler" : "Error",
+                                        description:
+                                          language === "de"
+                                            ? "Status konnte nicht aktualisiert werden"
+                                            : "Failed to update status",
+                                        variant: "destructive",
+                                      });
+                                    }
+                                  }}
+                                />
+                                <span>{measure.measure_building_block || "Measure"}</span>
+                              </label>
+                            ))
+                          ) : (
+                            <span className="text-muted-foreground">{language === "de" ? "Keine Maßnahmen" : "No measures"}</span>
+                          )}
+                        </div>
+
+                        {/* Status Buttons */}
+                        <div className="flex flex-wrap gap-2 text-xs mb-3">
+                          {[
+                            { status: "not_started", label: "not started", bgColor: "bg-gray-500", textColor: "text-white", borderColor: "border-gray-600" },
+                            { status: "pending", label: "pending", bgColor: "bg-yellow-500", textColor: "text-white", borderColor: "border-yellow-600" },
+                            { status: "in_progress", label: "in progress", bgColor: "bg-blue-400", textColor: "text-white", borderColor: "border-blue-500" },
+                            { status: "blocked", label: "blocked", bgColor: "bg-orange-500", textColor: "text-white", borderColor: "border-orange-600" },
+                            { status: "completed", label: "completed", bgColor: "bg-green-500", textColor: "text-white", borderColor: "border-green-600" },
+                          ].map(({ status, label, bgColor, textColor, borderColor }) => {
+                            // Check if any measure has this status
+                            const isActive = selectedRisk?.measures?.some((m) => m.progress_status === status);
+                            const hasMeasures = selectedRisk?.measures && selectedRisk.measures.length > 0;
+                            
+                            return (
+                              <button
+                                key={status}
+                                onClick={async (e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  
+                                  if (!hasMeasures) {
+                                    toast({
+                                      title: language === "de" ? "Info" : "Info",
+                                      description: language === "de" ? "Bitte fügen Sie zuerst Maßnahmen hinzu" : "Please add measures first",
+                                    });
+                                    return;
+                                  }
+                                  
+                                  // Update all measures for this risk (or just the first one? The logic updates only the first one)
+                                  // The original logic updated the first measure found.
+                                  const measureToUpdate = selectedRisk.measures[0];
+                                  if (measureToUpdate.id) {
+                                    
+                                    // Optimistic update
+                                    if (selectedRisk) {
+                                      const updatedMeasures = selectedRisk.measures?.map((m) =>
+                                        m.id === measureToUpdate.id
+                                          ? { ...m, progress_status: status }
+                                          : m
+                                      ) || [];
+                                      setSelectedRisk({
+                                        ...selectedRisk,
+                                        measures: updatedMeasures,
+                                      });
+                                    }
+
+                                    const { error } = await supabase
+                                      .from("risk_assessment_measures")
+                                      .update({ progress_status: status })
+                                      .eq("id", measureToUpdate.id);
+
+                                    if (error) {
+                                      toast({
+                                        title: language === "de" ? "Fehler" : "Error",
+                                        description: language === "de" ? "Status konnte nicht aktualisiert werden" : "Failed to update status",
+                                        variant: "destructive",
+                                      });
+                                    } else {
+                                      toast({
+                                        title: language === "de" ? "Erfolg" : "Success",
+                                        description: language === "de" ? `Status auf "${label}" aktualisiert` : `Status updated to "${label}"`,
+                                      });
+                                      fetchData(false);
+                                    }
+                                  }
+                                }}
+                                className={`px-2 py-0.5 ${bgColor} ${textColor} border-2 ${isActive ? 'ring-2 ring-white ring-offset-1' : borderColor} rounded cursor-pointer hover:opacity-90 transition-all`}
+                              >
+                                {label}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {/* Note Text Area */}
+                        <div>
+                          <textarea
+                            value={editableNotes}
+                            onChange={(e) => setEditableNotes(e.target.value)}
+                            className="w-full min-h-[100px] p-2 text-sm border rounded-md resize-vertical"
+                            placeholder={language === "de" ? "Notizen hinzufügen..." : "Add notes..."}
+                          />
+                        </div>
+
+                        {/* Save Note Button */}
+                        <div className="flex justify-end">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={async () => {
+                              if (!selectedRisk) return;
+                              
+                              // Optimistic update (for internal state consistency)
+                              setSelectedRisk({ ...selectedRisk, notes: editableNotes });
+                              
+                              const { error } = await supabase
+                                .from("risk_assessments")
+                                .update({ notes: editableNotes })
+                                .eq("id", selectedRisk.id);
+
+                              if (error) {
+                                toast({
+                                  title: language === "de" ? "Fehler" : "Error",
+                                  description: language === "de" ? "Notizen konnten nicht gespeichert werden" : "Failed to save notes",
+                                  variant: "destructive",
+                                });
+                              } else {
+                                toast({
+                                  title: language === "de" ? "Erfolg" : "Success",
+                                  description: language === "de" ? "Notizen erfolgreich gespeichert" : "Notes saved successfully",
+                                });
+                                fetchData(false);
+                              }
+                            }}
+                          >
+                            <Save className="w-4 h-4 mr-2" />
+                            {language === "de" ? "Notiz Speichern" : "Save Note"}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Legend */}
+                    <div className="flex flex-wrap gap-3 text-xs justify-center items-center p-3 bg-muted/30 rounded-lg border">
+                      <div className="flex items-center gap-2">
+                        <div className="w-5 h-5 bg-green-500 rounded"></div>
+                        <span className="font-medium">Low</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-5 h-5 bg-yellow-400 rounded"></div>
+                        <span className="font-medium">Medium</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-5 h-5 bg-orange-500 rounded"></div>
+                        <span className="font-medium">High</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-5 h-5 bg-red-500 rounded"></div>
+                        <span className="font-medium">Critical</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
-
-                {/* Approve Button */}
-                {selectedRisk.approval_status !== "approved" && (
-                  <div className="pt-4 border-t">
-                    <Button
-                      onClick={() => {
-                        setIsMatrixDialogOpen(false);
-                        setIsApprovalDialogOpen(true);
-                      }}
-                      className="w-full"
-                    >
-                      <Check className="w-4 h-4 mr-2" />
-                      Approve Risk Assessment
-                    </Button>
-                  </div>
-                )}
-              </div>
+              </>
             )}
 
             <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setIsMatrixDialogOpen(false)}
-              >
-                Close
-              </Button>
+              <div className="flex justify-between w-full">
+                <Button
+                  variant="outline"
+                  onClick={() => setIsMatrixDialogOpen(false)}
+                >
+                  {language === "de" ? "Schließen" : "Close"}
+                </Button>
+                <Button
+                  onClick={() => {
+                    setIsMatrixDialogOpen(false);
+                    setIsApprovalDialogOpen(true);
+                  }}
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  <Check className="w-4 h-4 mr-2" />
+                  {language === "de" ? "Genehmigen" : "Approve"}
+                </Button>
+              </div>
             </DialogFooter>
           </DialogContent>
         </Dialog>

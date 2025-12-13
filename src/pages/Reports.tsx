@@ -1,17 +1,34 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useNavigate } from "react-router-dom";
 import {
-  ArrowLeft,
   Download,
-  FileText,
-  TrendingUp,
-  Users,
+  Filter,
+  Plus,
+  Shield,
+  ClipboardCheck,
   AlertTriangle,
+  GraduationCap,
   CheckCircle,
+  ListChecks,
+  Stethoscope,
+  Calendar,
+  Eye,
+  ChevronDown,
+  TrendingUp,
   BarChart3,
+  GripVertical,
+  RotateCcw,
+  Lock,
+  Unlock,
 } from "lucide-react";
+import { Responsive, WidthProvider } from "react-grid-layout/legacy";
+import "react-grid-layout/css/styles.css";
+
+// Wrap ResponsiveGridLayout with WidthProvider
+const ResponsiveGridLayout = WidthProvider(Responsive);
+
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -20,9 +37,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -31,8 +53,25 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import {
+  LineChart,
+  Line,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from "recharts";
+import ReportBuilder, { ReportConfig } from "@/components/reports/ReportBuilder";
+import ReportLibrary from "@/components/reports/ReportLibrary";
+import ReportWidget from "@/components/reports/ReportWidget";
 
 interface ReportStats {
   totalEmployees: number;
@@ -41,6 +80,8 @@ interface ReportStats {
   totalTasks: number;
   totalIncidents: number;
   totalMeasures: number;
+  totalTrainings: number;
+  totalCheckUps: number;
   completedAudits: number;
   completedTasks: number;
   completedMeasures: number;
@@ -56,12 +97,26 @@ interface TrainingStatus {
   compliance_rate: number;
 }
 
+interface NavSection {
+  id: string;
+  name: string;
+  icon: React.ReactNode;
+}
+
 export default function Reports() {
   const { user, companyId, loading } = useAuth();
   const { t } = useLanguage();
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  const [activeSection, setActiveSection] = useState("overview");
+  const [reportName, setReportName] = useState("Monthly Safety Report");
+  const [visibility, setVisibility] = useState("only-me");
+  const [dateRange, setDateRange] = useState("last-30-days");
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showFilterDialog, setShowFilterDialog] = useState(false);
+  const [showAddReportDialog, setShowAddReportDialog] = useState(false);
+  
   const [stats, setStats] = useState<ReportStats>({
     totalEmployees: 0,
     totalRiskAssessments: 0,
@@ -69,6 +124,8 @@ export default function Reports() {
     totalTasks: 0,
     totalIncidents: 0,
     totalMeasures: 0,
+    totalTrainings: 0,
+    totalCheckUps: 0,
     completedAudits: 0,
     completedTasks: 0,
     completedMeasures: 0,
@@ -77,6 +134,25 @@ export default function Reports() {
   });
 
   const [trainingMatrix, setTrainingMatrix] = useState<TrainingStatus[]>([]);
+  const [chartData, setChartData] = useState<any[]>([]);
+  
+  // Analytics & Report Builder State
+  const [customReports, setCustomReports] = useState<ReportConfig[]>([]);
+  const [isBuilderOpen, setIsBuilderOpen] = useState(false);
+  const [isLibraryOpen, setIsLibraryOpen] = useState(false);
+  const [selectedReport, setSelectedReport] = useState<ReportConfig | null>(null);
+
+  // Navigation sections
+  const navSections: NavSection[] = [
+    { id: "overview", name: "Overview", icon: <BarChart3 className="w-4 h-4" /> },
+    { id: "risk-assessments", name: "Risk Assessments", icon: <Shield className="w-4 h-4" /> },
+    { id: "audits", name: "Audits", icon: <ClipboardCheck className="w-4 h-4" /> },
+    { id: "incidents", name: "Incidents", icon: <AlertTriangle className="w-4 h-4" /> },
+    { id: "trainings", name: "Trainings", icon: <GraduationCap className="w-4 h-4" /> },
+    { id: "measures", name: "Measures", icon: <CheckCircle className="w-4 h-4" /> },
+    { id: "tasks", name: "Tasks", icon: <ListChecks className="w-4 h-4" /> },
+    { id: "checkups", name: "Check-ups", icon: <Stethoscope className="w-4 h-4" /> },
+  ];
 
   useEffect(() => {
     if (!loading && !user) {
@@ -87,14 +163,37 @@ export default function Reports() {
   useEffect(() => {
     if (companyId) {
       fetchReportData();
+      fetchChartData();
+      loadCustomReports();
     }
   }, [companyId]);
+  
+  // Load custom reports from localStorage
+  const loadCustomReports = () => {
+    try {
+      const saved = localStorage.getItem('hse_custom_reports');
+      if (saved) {
+        setCustomReports(JSON.parse(saved));
+      }
+    } catch (error) {
+      console.error('Error loading custom reports:', error);
+    }
+  };
+  
+  // Save custom reports to localStorage
+  const saveCustomReports = (reports: ReportConfig[]) => {
+    try {
+      localStorage.setItem('hse_custom_reports', JSON.stringify(reports));
+      setCustomReports(reports);
+    } catch (error) {
+      console.error('Error saving custom reports:', error);
+    }
+  };
 
   const fetchReportData = async () => {
     if (!companyId) return;
 
     try {
-      // Fetch all stats in parallel
       const [
         employeesRes,
         risksRes,
@@ -102,6 +201,8 @@ export default function Reports() {
         tasksRes,
         incidentsRes,
         measuresRes,
+        trainingsRes,
+        checkUpsRes,
         completedAuditsRes,
         completedTasksRes,
         completedMeasuresRes,
@@ -130,6 +231,14 @@ export default function Reports() {
           .eq("company_id", companyId),
         supabase
           .from("measures" as any)
+          .select("id", { count: "exact", head: true })
+          .eq("company_id", companyId),
+        supabase
+          .from("courses")
+          .select("id", { count: "exact", head: true })
+          .eq("company_id", companyId),
+        supabase
+          .from("employee_checkups")
           .select("id", { count: "exact", head: true })
           .eq("company_id", companyId),
         supabase
@@ -173,6 +282,8 @@ export default function Reports() {
         totalTasks: tasksRes.count || 0,
         totalIncidents: incidentsRes.count || 0,
         totalMeasures: measuresRes.count || 0,
+        totalTrainings: trainingsRes.count || 0,
+        totalCheckUps: checkUpsRes.count || 0,
         completedAudits: completedAuditsRes.count || 0,
         completedTasks: completedTasksRes.count || 0,
         completedMeasures: completedMeasuresRes.count || 0,
@@ -180,7 +291,6 @@ export default function Reports() {
         trainingCompliance: trainingComplianceRate,
       });
 
-      // Build training matrix
       await fetchTrainingMatrix();
     } catch (error: any) {
       console.error("Error fetching report data:", error);
@@ -237,10 +347,120 @@ export default function Reports() {
     }
   };
 
+  const fetchChartData = () => {
+    // Mock data for demonstration - replace with actual data fetching
+    const mockData = [
+      { month: "Jan", incidents: 4, trainings: 12, tasks: 25 },
+      { month: "Feb", incidents: 7, trainings: 15, tasks: 28 },
+      { month: "Mar", incidents: 3, trainings: 18, tasks: 32 },
+      { month: "Apr", incidents: 5, trainings: 14, tasks: 27 },
+      { month: "May", incidents: 6, trainings: 20, tasks: 35 },
+      { month: "Jun", incidents: 2, trainings: 22, tasks: 38 },
+    ];
+    setChartData(mockData);
+  };
+
   const exportReport = () => {
     toast({
       title: "Coming Soon",
       description: "PDF export functionality will be available soon",
+    });
+  };
+
+  const handleDateRangeChange = (range: string) => {
+    setDateRange(range);
+    toast({
+      title: "Date Range Updated",
+      description: `Showing data for ${range.replace("-", " ")}`,
+    });
+  };
+
+  const handleAddFilter = () => {
+    setShowFilterDialog(true);
+    toast({
+      title: "Add Filter",
+      description: "Filter functionality coming soon",
+    });
+  };
+
+  const handleAddReport = () => {
+    setIsLibraryOpen(true);
+  };
+  
+  const handleSelectTemplate = (template: Partial<ReportConfig>) => {
+    setSelectedReport({ ...template, id: Date.now().toString() } as ReportConfig);
+    setIsLibraryOpen(false);
+    setIsBuilderOpen(true);
+  };
+  
+  const handleSaveReport = (config: ReportConfig) => {
+    const existingIndex = customReports.findIndex(r => r.id === config.id);
+    let updatedReports;
+    
+    if (existingIndex >= 0) {
+      // Update existing
+      updatedReports = [...customReports];
+      updatedReports[existingIndex] = config;
+      toast({
+        title: "Report Updated",
+        description: `"${config.title}" has been updated`,
+      });
+    } else {
+      // Add new
+      updatedReports = [...customReports, config];
+      toast({
+        title: "Report Created",
+        description: `"${config.title}" has been added to your dashboard`,
+      });
+    }
+    
+    saveCustomReports(updatedReports);
+    setIsBuilderOpen(false);
+    setSelectedReport(null);
+  };
+  
+  const handleEditReport = (config: ReportConfig) => {
+    setSelectedReport(config);
+    setIsBuilderOpen(true);
+  };
+  
+  const handleDuplicateReport = (config: ReportConfig) => {
+    const duplicate = {
+      ...config,
+      id: Date.now().toString(),
+      title: `${config.title} (Copy)`,
+    };
+    const updatedReports = [...customReports, duplicate];
+    saveCustomReports(updatedReports);
+    toast({
+      title: "Report Duplicated",
+      description: `Created a copy of "${config.title}"`,
+    });
+  };
+  
+  const handleDeleteReport = (id: string) => {
+    const report = customReports.find(r => r.id === id);
+    const updatedReports = customReports.filter(r => r.id !== id);
+    saveCustomReports(updatedReports);
+    toast({
+      title: "Report Deleted",
+      description: `"${report?.title}" has been removed`,
+    });
+  };
+  
+  const handleExportReport = (config: ReportConfig) => {
+    toast({
+      title: "Exporting Report",
+      description: `Exporting "${config.title}"...`,
+    });
+  };
+
+  const handleVisibilityChange = (value: string) => {
+    setVisibility(value);
+    const visibilityText = value === "only-me" ? "only to you" : value === "team" ? "to your team" : "to the company";
+    toast({
+      title: "Visibility Updated",
+      description: `Report is now visible ${visibilityText}`,
     });
   };
 
@@ -253,438 +473,1005 @@ export default function Reports() {
   }
 
   return (
-    <div className="p-8">
-      <div className="mb-8 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={() => navigate("/dashboard")}>
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            {t("common.back")}
-          </Button>
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg">
-            <BarChart3 className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h2 className="text-3xl font-bold">{t("reports.title")}</h2>
-            <p className="text-muted-foreground">{t("reports.subtitle")}</p>
-          </div>
+    <div className="flex h-screen bg-background">
+      {/* Left Sub-Navigation */}
+      <aside className="w-56 border-r bg-card flex-shrink-0">
+        <div className="p-4 space-y-1">
+          {navSections.map((section) => (
+            <button
+              key={section.id}
+              onClick={() => setActiveSection(section.id)}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                activeSection === section.id
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              }`}
+            >
+              {section.icon}
+              <span>{section.name}</span>
+            </button>
+          ))}
         </div>
+      </aside>
+
+      {/* Main Content Area */}
+      <main className="flex-1 overflow-auto">
+        {/* Professional Header */}
+        <header className="sticky top-0 z-10 bg-card border-b px-8 py-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4 flex-1">
+              <Input
+                value={reportName}
+                onChange={(e) => setReportName(e.target.value)}
+                className="max-w-xs font-semibold border-none shadow-none focus-visible:ring-0 text-lg"
+              />
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <Select value={dateRange} onValueChange={handleDateRangeChange}>
+                <SelectTrigger className="w-40">
+                  <Calendar className="w-4 h-4 mr-2" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="last-7-days">Last 7 days</SelectItem>
+                  <SelectItem value="last-30-days">Last 30 days</SelectItem>
+                  <SelectItem value="last-90-days">Last 90 days</SelectItem>
+                  <SelectItem value="this-month">This month</SelectItem>
+                  <SelectItem value="last-month">Last month</SelectItem>
+                  <SelectItem value="this-year">This year</SelectItem>
+                </SelectContent>
+              </Select>
+              
+              <Button variant="outline" size="sm" onClick={handleAddFilter}>
+                <Filter className="w-4 h-4 mr-2" />
+                Add filter
+              </Button>
+              
+              <Select value={visibility} onValueChange={handleVisibilityChange}>
+                <SelectTrigger className="w-48">
+                  <Eye className="w-4 h-4 mr-2" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="only-me">Visible only to me</SelectItem>
+                  <SelectItem value="team">Visible to team</SelectItem>
+                  <SelectItem value="company">Visible to company</SelectItem>
+                </SelectContent>
+              </Select>
+              
+              <Button className="bg-purple-600 hover:bg-purple-700" size="sm" onClick={handleAddReport}>
+                <Plus className="w-4 h-4 mr-2" />
+                Add report
+              </Button>
+              
+              <Button variant="outline" size="sm" onClick={exportReport}>
+                <Download className="w-4 h-4 mr-2" />
+                Export PDF
+              </Button>
+            </div>
+          </div>
+        </header>
+
+        {/* Content Sections */}
+        <div className="p-8">
+          {activeSection === "overview" && (
+            <OverviewSection stats={stats} chartData={chartData} customReports={customReports} onEditReport={handleEditReport} onDuplicateReport={handleDuplicateReport} onDeleteReport={handleDeleteReport} onExportReport={handleExportReport} />
+          )}
+          {activeSection === "risk-assessments" && (
+            <RiskAssessmentsSection stats={stats} chartData={chartData} />
+          )}
+          {activeSection === "audits" && (
+            <AuditsSection stats={stats} chartData={chartData} />
+          )}
+          {activeSection === "incidents" && (
+            <IncidentsSection stats={stats} chartData={chartData} />
+          )}
+          {activeSection === "trainings" && (
+            <TrainingsSection stats={stats} trainingMatrix={trainingMatrix} chartData={chartData} />
+          )}
+          {activeSection === "measures" && (
+            <MeasuresSection stats={stats} chartData={chartData} />
+          )}
+          {activeSection === "tasks" && (
+            <TasksSection stats={stats} chartData={chartData} />
+          )}
+          {activeSection === "checkups" && (
+            <CheckupsSection stats={stats} />
+          )}
         </div>
-        <Button onClick={exportReport}>
-          <Download className="w-4 h-4 mr-2" />
-          {t("reports.exportPDF")}
+      </main>
+      
+      {/* Report Builder & Library Dialogs */}
+      <ReportBuilder
+        isOpen={isBuilderOpen}
+        onClose={() => {
+          setIsBuilderOpen(false);
+          setSelectedReport(null);
+        }}
+        onSave={handleSaveReport}
+        initialConfig={selectedReport}
+      />
+      
+      <ReportLibrary
+        isOpen={isLibraryOpen}
+        onClose={() => setIsLibraryOpen(false)}
+        onSelectTemplate={handleSelectTemplate}
+      />
+    </div>
+  );
+}
+
+// Section Components
+
+// Default layout for the dashboard grid
+const defaultLayouts = {
+  lg: [
+    { i: "risk-assessments", x: 0, y: 0, w: 3, h: 3, minW: 2, minH: 3, static: false },
+    { i: "safety-audits", x: 3, y: 0, w: 3, h: 3, minW: 2, minH: 3, static: false },
+    { i: "incidents", x: 6, y: 0, w: 3, h: 3, minW: 2, minH: 3, static: false },
+    { i: "training-compliance", x: 9, y: 0, w: 3, h: 3, minW: 2, minH: 3, static: false },
+    { i: "incident-trends", x: 0, y: 3, w: 12, h: 6, minW: 6, minH: 5, static: false },
+    { i: "audit-completion", x: 0, y: 9, w: 6, h: 5, minW: 4, minH: 4, static: false },
+    { i: "task-completion", x: 6, y: 9, w: 6, h: 5, minW: 4, minH: 4, static: false },
+  ],
+  md: [
+    { i: "risk-assessments", x: 0, y: 0, w: 5, h: 3, minW: 3, minH: 3, static: false },
+    { i: "safety-audits", x: 5, y: 0, w: 5, h: 3, minW: 3, minH: 3, static: false },
+    { i: "incidents", x: 0, y: 3, w: 5, h: 3, minW: 3, minH: 3, static: false },
+    { i: "training-compliance", x: 5, y: 3, w: 5, h: 3, minW: 3, minH: 3, static: false },
+    { i: "incident-trends", x: 0, y: 6, w: 10, h: 6, minW: 6, minH: 5, static: false },
+    { i: "audit-completion", x: 0, y: 12, w: 5, h: 5, minW: 4, minH: 4, static: false },
+    { i: "task-completion", x: 5, y: 12, w: 5, h: 5, minW: 4, minH: 4, static: false },
+  ],
+  sm: [
+    { i: "risk-assessments", x: 0, y: 0, w: 6, h: 3, minW: 3, minH: 3, static: false },
+    { i: "safety-audits", x: 0, y: 3, w: 6, h: 3, minW: 3, minH: 3, static: false },
+    { i: "incidents", x: 0, y: 6, w: 6, h: 3, minW: 3, minH: 3, static: false },
+    { i: "training-compliance", x: 0, y: 9, w: 6, h: 3, minW: 3, minH: 3, static: false },
+    { i: "incident-trends", x: 0, y: 12, w: 6, h: 6, minW: 4, minH: 5, static: false },
+    { i: "audit-completion", x: 0, y: 18, w: 6, h: 5, minW: 3, minH: 4, static: false },
+    { i: "task-completion", x: 0, y: 23, w: 6, h: 5, minW: 3, minH: 4, static: false },
+  ],
+};
+
+const LAYOUT_STORAGE_KEY = "hse_dashboard_layout";
+
+// Storage keys for each section
+const SECTION_LAYOUT_KEYS = {
+  overview: "hse_layout_overview",
+  "risk-assessments": "hse_layout_risk_assessments",
+  audits: "hse_layout_audits",
+  incidents: "hse_layout_incidents",
+  trainings: "hse_layout_trainings",
+  measures: "hse_layout_measures",
+  tasks: "hse_layout_tasks",
+  checkups: "hse_layout_checkups",
+  customReports: "hse_layout_custom_reports",
+};
+
+const CUSTOM_REPORTS_LAYOUT_KEY = "hse_custom_reports_grid_layout";
+
+// Generate default layout for custom reports based on the number of reports
+const generateCustomReportsLayout = (reportCount: number) => {
+  const layouts: any[] = [];
+  for (let i = 0; i < reportCount; i++) {
+    layouts.push({
+      i: `custom-report-${i}`,
+      x: (i % 3) * 4,
+      y: Math.floor(i / 3) * 6,
+      w: 4,
+      h: 6,
+      minW: 3,
+      minH: 4,
+      static: false,
+    });
+  }
+  return layouts;
+};
+
+function OverviewSection({ 
+  stats, 
+  chartData, 
+  customReports, 
+  onEditReport, 
+  onDuplicateReport, 
+  onDeleteReport, 
+  onExportReport 
+}: { 
+  stats: ReportStats; 
+  chartData: any[];
+  customReports: ReportConfig[];
+  onEditReport: (config: ReportConfig) => void;
+  onDuplicateReport: (config: ReportConfig) => void;
+  onDeleteReport: (id: string) => void;
+  onExportReport: (config: ReportConfig) => void;
+}) {
+  const { toast } = useToast();
+  // Load layouts from localStorage or use defaults
+  const [layouts, setLayouts] = useState<{ [key: string]: any[] }>(() => {
+    try {
+      const saved = localStorage.getItem(LAYOUT_STORAGE_KEY);
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (error) {
+      console.error("Error loading layout:", error);
+    }
+    return defaultLayouts;
+  });
+
+  // Load custom reports layouts from localStorage
+  const [customReportsLayouts, setCustomReportsLayouts] = useState<{ [key: string]: any[] }>(() => {
+    try {
+      const saved = localStorage.getItem(CUSTOM_REPORTS_LAYOUT_KEY);
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (error) {
+      console.error("Error loading custom reports layout:", error);
+    }
+    const defaultLayout = generateCustomReportsLayout(customReports.length);
+    return { lg: defaultLayout, md: defaultLayout, sm: defaultLayout };
+  });
+
+  // Save layouts to localStorage when they change
+  const handleLayoutChange = useCallback((currentLayout: any[], allLayouts: { [key: string]: any[] }) => {
+    setLayouts(allLayouts);
+    try {
+      localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(allLayouts));
+    } catch (error) {
+      console.error("Error saving layout:", error);
+    }
+  }, []);
+
+  // Reset layout to defaults
+  const resetLayout = useCallback(() => {
+    setLayouts(defaultLayouts);
+    localStorage.removeItem(LAYOUT_STORAGE_KEY);
+    toast({
+      title: "Layout Reset",
+      description: "Dashboard layout has been reset to default",
+    });
+  }, [toast]);
+
+  return (
+    <div className="space-y-8">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold mb-2">Overview</h2>
+          <p className="text-muted-foreground">Key metrics and statistics at a glance. Drag cards to reposition, drag corners to resize.</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={resetLayout}>
+          <RotateCcw className="w-4 h-4 mr-2" />
+          Reset Layout
         </Button>
       </div>
 
-      {/* Overview Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow duration-200">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              {t("reports.totalEmployees")}
-            </CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalEmployees}</div>
-            <p className="text-xs text-muted-foreground">
-              {t("reports.activeWorkforce")}
-            </p>
-          </CardContent>
-        </Card>
+      {/* Resizable/Draggable Grid Layout */}
+      <ResponsiveGridLayout
+        className="layout"
+        layouts={layouts}
+        breakpoints={{ lg: 1200, md: 996, sm: 768 }}
+        cols={{ lg: 12, md: 10, sm: 6 }}
+        rowHeight={70}
+        onLayoutChange={handleLayoutChange}
+        draggableHandle=".drag-handle"
+        isResizable={true}
+        isDraggable={true}
+        margin={[20, 20]}
+        containerPadding={[0, 0]}
+        compactType="vertical"
+      >
+        {/* Risk Assessments Card */}
+        <div key="risk-assessments">
+          <DraggableCard
+            title="Risk Assessments"
+            subtitle="Total GBU"
+            value={stats.totalRiskAssessments}
+            icon={<Shield className="w-5 h-5" />}
+            color="bg-orange-50 text-orange-600"
+          />
+        </div>
 
-        <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow duration-200">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              {t("reports.riskAssessments")}
-            </CardTitle>
-            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {stats.totalRiskAssessments}
+        {/* Safety Audits Card */}
+        <div key="safety-audits">
+          <DraggableCard
+            title="Safety Audits"
+            subtitle={`${stats.completedAudits} completed`}
+            value={stats.totalAudits}
+            icon={<ClipboardCheck className="w-5 h-5" />}
+            color="bg-blue-50 text-blue-600"
+          />
+        </div>
+
+        {/* Incidents Card */}
+        <div key="incidents">
+          <DraggableCard
+            title="Incidents"
+            subtitle={`${stats.openIncidents} open cases`}
+            value={stats.totalIncidents}
+            icon={<AlertTriangle className="w-5 h-5" />}
+            color="bg-red-50 text-red-600"
+          />
+        </div>
+
+        {/* Training Compliance Card */}
+        <div key="training-compliance">
+          <DraggableCard
+            title="Training Compliance"
+            subtitle="Overall rate"
+            value={`${stats.trainingCompliance}%`}
+            icon={<GraduationCap className="w-5 h-5" />}
+            color="bg-green-50 text-green-600"
+          />
+        </div>
+
+        {/* Incident Trends Chart */}
+        <div key="incident-trends">
+          <Card className="dashboard-grid-card border shadow-sm h-full">
+            <div className="drag-handle border-b">
+              <GripVertical className="w-4 h-4 text-muted-foreground" />
             </div>
-            <p className="text-xs text-muted-foreground">
-              {t("reports.totalGBU")}
-            </p>
-          </CardContent>
-        </Card>
+            <CardHeader className="py-3">
+              <CardTitle>Incident Trends</CardTitle>
+              <CardDescription>Monthly incident reports over the last 6 months</CardDescription>
+            </CardHeader>
+            <CardContent className="flex-1 pb-4">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData}>
+                  <defs>
+                    <linearGradient id="colorIncidents" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="month" stroke="#888" fontSize={12} />
+                  <YAxis stroke="#888" fontSize={12} />
+                  <Tooltip />
+                  <Area
+                    type="monotone"
+                    dataKey="incidents"
+                    stroke="#8b5cf6"
+                    strokeWidth={2}
+                    fillOpacity={1}
+                    fill="url(#colorIncidents)"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </div>
 
-        <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow duration-200">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              {t("reports.safetyAudits")}
-            </CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalAudits}</div>
-            <p className="text-xs text-muted-foreground">
-              {stats.completedAudits} {t("reports.completed")}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow duration-200">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              {t("reports.trainingCompliance")}
-            </CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {stats.trainingCompliance}%
+        {/* Audit Completion Card */}
+        <div key="audit-completion">
+          <Card className="dashboard-grid-card border shadow-sm h-full">
+            <div className="drag-handle border-b">
+              <GripVertical className="w-4 h-4 text-muted-foreground" />
             </div>
-            <Progress value={stats.trainingCompliance} className="mt-2" />
-          </CardContent>
-        </Card>
+            <CardHeader className="py-3">
+              <CardTitle>Audit Completion</CardTitle>
+              <CardDescription>Safety audit metrics</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Total Audits</span>
+                <Badge>{stats.totalAudits}</Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Completed</span>
+                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                  {stats.completedAudits}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Completion Rate</span>
+                <span className="text-lg font-bold">
+                  {stats.totalAudits > 0
+                    ? Math.round((stats.completedAudits / stats.totalAudits) * 100)
+                    : 0}
+                  %
+                </span>
+              </div>
+              <Progress
+                value={
+                  stats.totalAudits > 0
+                    ? (stats.completedAudits / stats.totalAudits) * 100
+                    : 0
+                }
+                className="h-2"
+              />
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Task Completion Card */}
+        <div key="task-completion">
+          <Card className="dashboard-grid-card border shadow-sm h-full">
+            <div className="drag-handle border-b">
+              <GripVertical className="w-4 h-4 text-muted-foreground" />
+            </div>
+            <CardHeader className="py-3">
+              <CardTitle>Task Completion</CardTitle>
+              <CardDescription>Corrective action tracking</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Total Tasks</span>
+                <Badge>{stats.totalTasks}</Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Completed</span>
+                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                  {stats.completedTasks}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Completion Rate</span>
+                <span className="text-lg font-bold">
+                  {stats.totalTasks > 0
+                    ? Math.round((stats.completedTasks / stats.totalTasks) * 100)
+                    : 0}
+                  %
+                </span>
+              </div>
+              <Progress
+                value={
+                  stats.totalTasks > 0
+                    ? (stats.completedTasks / stats.totalTasks) * 100
+                    : 0
+                }
+                className="h-2"
+              />
+            </CardContent>
+          </Card>
+        </div>
+      </ResponsiveGridLayout>
+      
+      {/* Custom Reports Grid */}
+      {customReports && customReports.length > 0 && (
+        <div className="mt-12">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-semibold">Custom Reports</h3>
+              <p className="text-sm text-muted-foreground">Drag to reposition, resize from corners</p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const defaultLayout = generateCustomReportsLayout(customReports.length);
+                const defaultLayouts = { lg: defaultLayout, md: defaultLayout, sm: defaultLayout };
+                setCustomReportsLayouts(defaultLayouts);
+                localStorage.removeItem(CUSTOM_REPORTS_LAYOUT_KEY);
+                toast({
+                  title: "Layout Reset",
+                  description: "Custom reports layout has been reset to default",
+                });
+              }}
+            >
+              <RotateCcw className="w-4 h-4 mr-2" />
+              Reset Layout
+            </Button>
+          </div>
+          
+          <ResponsiveGridLayout
+            className="layout"
+            layouts={customReportsLayouts}
+            breakpoints={{ lg: 1200, md: 996, sm: 768 }}
+            cols={{ lg: 12, md: 10, sm: 6 }}
+            rowHeight={70}
+            onLayoutChange={(currentLayout: any[], allLayouts: { [key: string]: any[] }) => {
+              setCustomReportsLayouts(allLayouts);
+              try {
+                localStorage.setItem(CUSTOM_REPORTS_LAYOUT_KEY, JSON.stringify(allLayouts));
+              } catch (error) {
+                console.error("Error saving custom reports layout:", error);
+              }
+            }}
+            draggableHandle=".drag-handle"
+            isResizable={true}
+            isDraggable={true}
+            margin={[20, 20]}
+            containerPadding={[0, 0]}
+            compactType="vertical"
+          >
+            {customReports.map((report, index) => (
+              <div key={`custom-report-${index}`}>
+                <ReportWidget
+                  config={report}
+                  onEdit={onEditReport}
+                  onDuplicate={onDuplicateReport}
+                  onDelete={onDeleteReport}
+                  onExport={onExportReport}
+                />
+              </div>
+            ))}
+          </ResponsiveGridLayout>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Reusable Draggable Grid Section Wrapper
+interface DraggableGridSectionProps {
+  sectionId: string;
+  title: string;
+  description: string;
+  defaultLayout: any[];
+  handleColor?: string;
+  children: (lockStates: { [key: string]: boolean }, toggleLock: (id: string) => void) => React.ReactNode;
+}
+
+function DraggableGridSection({
+  sectionId,
+  title,
+  description,
+  defaultLayout,
+  handleColor = "text-primary",
+  children,
+}: DraggableGridSectionProps) {
+  const { toast } = useToast();
+  const [layouts, setLayouts] = useState<{ [key: string]: any[] }>(() => {
+    try {
+      const saved = localStorage.getItem(SECTION_LAYOUT_KEYS[sectionId as keyof typeof SECTION_LAYOUT_KEYS]);
+      if (saved) return JSON.parse(saved);
+    } catch (error) {
+      console.error(`Error loading ${sectionId} layout:`, error);
+    }
+    return { lg: defaultLayout, md: defaultLayout, sm: defaultLayout };
+  });
+
+  const [lockStates, setLockStates] = useState<{ [key: string]: boolean }>({});
+
+  const handleLayoutChange = useCallback(
+    (currentLayout: any[], allLayouts: { [key: string]: any[] }) => {
+      setLayouts(allLayouts);
+      try {
+        localStorage.setItem(SECTION_LAYOUT_KEYS[sectionId as keyof typeof SECTION_LAYOUT_KEYS], JSON.stringify(allLayouts));
+      } catch (error) {
+        console.error(`Error saving ${sectionId} layout:`, error);
+      }
+    },
+    [sectionId]
+  );
+
+  const resetLayout = useCallback(() => {
+    const defaultLayouts = { lg: defaultLayout, md: defaultLayout, sm: defaultLayout };
+    setLayouts(defaultLayouts);
+    localStorage.removeItem(SECTION_LAYOUT_KEYS[sectionId as keyof typeof SECTION_LAYOUT_KEYS]);
+    toast({
+      title: "Layout Reset",
+      description: `${title} layout has been reset to default`,
+    });
+  }, [defaultLayout, sectionId, title, toast]);
+
+  const toggleLock = useCallback((itemId: string) => {
+    setLockStates((prev) => ({ ...prev, [itemId]: !prev[itemId] }));
+  }, []);
+
+  // Update layout to respect lock states
+  const layoutsWithLocks = useMemo(() => {
+    const updatedLayouts = { ...layouts };
+    Object.keys(updatedLayouts).forEach((breakpoint) => {
+      updatedLayouts[breakpoint] = updatedLayouts[breakpoint].map((item: any) => ({
+        ...item,
+        static: lockStates[item.i] || false,
+      }));
+    });
+    return updatedLayouts;
+  }, [layouts, lockStates]);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold mb-2">{title}</h2>
+          <p className="text-muted-foreground">{description}</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={resetLayout}>
+          <RotateCcw className="w-4 h-4 mr-2" />
+          Reset Layout
+        </Button>
       </div>
 
-      {/* Detailed Reports */}
-      <Tabs defaultValue="overview" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="overview">{t("reports.overview")}</TabsTrigger>
-          <TabsTrigger value="training">
-            {t("reports.trainingMatrix")}
-          </TabsTrigger>
-          <TabsTrigger value="incidents">{t("reports.incidents")}</TabsTrigger>
-          <TabsTrigger value="measures">{t("reports.measures")}</TabsTrigger>
-        </TabsList>
+      <ResponsiveGridLayout
+        className="layout"
+        layouts={layoutsWithLocks}
+        breakpoints={{ lg: 1200, md: 996, sm: 768 }}
+        cols={{ lg: 12, md: 10, sm: 6 }}
+        rowHeight={70}
+        onLayoutChange={handleLayoutChange}
+        draggableHandle=".drag-handle"
+        isResizable={true}
+        isDraggable={true}
+        margin={[20, 20]}
+        containerPadding={[0, 0]}
+        compactType="vertical"
+      >
+        {children(lockStates, toggleLock)}
+      </ResponsiveGridLayout>
+    </div>
+  );
+}
 
-        {/* Overview Tab */}
-        <TabsContent value="overview" className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>{t("reports.auditCompletion")}</CardTitle>
-                <CardDescription>{t("reports.auditMetrics")}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">
-                    {t("reports.totalAudits")}
-                  </span>
-                  <Badge>{stats.totalAudits}</Badge>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Completed</span>
-                  <Badge variant="outline" className="bg-green-50">
-                    {stats.completedAudits}
-                  </Badge>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Completion Rate</span>
-                  <span className="text-sm font-bold">
-                    {stats.totalAudits > 0
-                      ? Math.round(
-                          (stats.completedAudits / stats.totalAudits) * 100
-                        )
-                      : 0}
-                    %
-                  </span>
-                </div>
-                <Progress
-                  value={
-                    stats.totalAudits > 0
-                      ? (stats.completedAudits / stats.totalAudits) * 100
-                      : 0
-                  }
-                  className="mt-2"
-                />
-              </CardContent>
-            </Card>
+// Enhanced Draggable Card with Lock Feature
+function EnhancedDraggableCard({
+  id,
+  title,
+  subtitle,
+  value,
+  icon,
+  color,
+  handleColor = "text-muted-foreground",
+  isLocked = false,
+  onToggleLock,
+}: {
+  id: string;
+  title: string;
+  subtitle: string;
+  value: string | number;
+  icon: React.ReactNode;
+  color: string;
+  handleColor?: string;
+  isLocked?: boolean;
+  onToggleLock?: () => void;
+}) {
+  return (
+    <Card className="dashboard-grid-card border hover:border-primary/50 transition-all shadow-sm hover:shadow-md">
+      <div className="drag-handle border-b flex items-center justify-between px-3">
+        <GripVertical className={`w-4 h-4 ${handleColor} ${isLocked ? 'opacity-30' : ''}`} />
+        {onToggleLock && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleLock();
+            }}
+            className="p-1 hover:bg-muted rounded transition-colors"
+            title={isLocked ? "Unlock card" : "Lock card"}
+          >
+            {isLocked ? (
+              <Lock className="w-3 h-3 text-orange-500" />
+            ) : (
+              <Unlock className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100" />
+            )}
+          </button>
+        )}
+      </div>
+      <CardContent className="p-6 flex-1 flex flex-col justify-center group">
+        <div className={`w-12 h-12 rounded-lg ${color} flex items-center justify-center mb-4 transition-transform group-hover:scale-110`}>
+          {icon}
+        </div>
+        <h3 className="text-sm font-medium text-muted-foreground mb-1">{title}</h3>
+        <p className="text-xs text-muted-foreground mb-3">{subtitle}</p>
+        <p className="text-3xl font-bold">{value}</p>
+      </CardContent>
+    </Card>
+  );
+}
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Task Completion Status</CardTitle>
-                <CardDescription>Corrective action tracking</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Total Tasks</span>
-                  <Badge>{stats.totalTasks}</Badge>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Completed</span>
-                  <Badge variant="outline" className="bg-green-50">
-                    {stats.completedTasks}
-                  </Badge>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Completion Rate</span>
-                  <span className="text-sm font-bold">
-                    {stats.totalTasks > 0
-                      ? Math.round(
-                          (stats.completedTasks / stats.totalTasks) * 100
-                        )
-                      : 0}
-                    %
-                  </span>
-                </div>
-                <Progress
-                  value={
-                    stats.totalTasks > 0
-                      ? (stats.completedTasks / stats.totalTasks) * 100
-                      : 0
-                  }
-                  className="mt-2"
-                />
-              </CardContent>
-            </Card>
+// Draggable KPI Card Component
+function DraggableCard({
+  title,
+  subtitle,
+  value,
+  icon,
+  color,
+}: {
+  title: string;
+  subtitle: string;
+  value: string | number;
+  icon: React.ReactNode;
+  color: string;
+}) {
+  return (
+    <Card className="dashboard-grid-card border hover:border-primary/50 transition-colors shadow-sm">
+      <div className="drag-handle border-b">
+        <GripVertical className="w-4 h-4 text-muted-foreground" />
+      </div>
+      <CardContent className="p-6 flex-1 flex flex-col justify-center">
+        <div className={`w-12 h-12 rounded-lg ${color} flex items-center justify-center mb-4`}>
+          {icon}
+        </div>
+        <h3 className="text-sm font-medium text-muted-foreground mb-1">{title}</h3>
+        <p className="text-xs text-muted-foreground mb-3">{subtitle}</p>
+        <p className="text-3xl font-bold">{value}</p>
+      </CardContent>
+    </Card>
+  );
+}
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Incident Overview</CardTitle>
-                <CardDescription>Workplace incident statistics</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Total Incidents</span>
-                  <Badge>{stats.totalIncidents}</Badge>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">
-                    Under Investigation
-                  </span>
-                  <Badge variant="destructive">{stats.openIncidents}</Badge>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Closed</span>
-                  <Badge variant="outline" className="bg-green-50">
-                    {stats.totalIncidents - stats.openIncidents}
-                  </Badge>
-                </div>
-              </CardContent>
-            </Card>
+// KPI Card Component (non-draggable version for sections)
+function KPICard({
+  title,
+  subtitle,
+  value,
+  icon,
+  color,
+}: {
+  title: string;
+  subtitle: string;
+  value: string | number;
+  icon: React.ReactNode;
+  color: string;
+}) {
+  return (
+    <Card className="border hover:border-primary/50 transition-colors">
+      <CardContent className="p-6">
+        <div className={`w-10 h-10 rounded-lg ${color} flex items-center justify-center mb-3`}>
+          {icon}
+        </div>
+        <h3 className="text-sm font-medium text-muted-foreground mb-1">{title}</h3>
+        <p className="text-xs text-muted-foreground mb-2">{subtitle}</p>
+        <p className="text-2xl font-bold">{value}</p>
+      </CardContent>
+    </Card>
+  );
+}
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Measures Status</CardTitle>
-                <CardDescription>
-                  Corrective & preventive measures
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Total Measures</span>
-                  <Badge>{stats.totalMeasures}</Badge>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Completed</span>
-                  <Badge variant="outline" className="bg-green-50">
-                    {stats.completedMeasures}
-                  </Badge>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Completion Rate</span>
-                  <span className="text-sm font-bold">
-                    {stats.totalMeasures > 0
-                      ? Math.round(
-                          (stats.completedMeasures / stats.totalMeasures) * 100
-                        )
-                      : 0}
-                    %
-                  </span>
-                </div>
-                <Progress
-                  value={
-                    stats.totalMeasures > 0
-                      ? (stats.completedMeasures / stats.totalMeasures) * 100
-                      : 0
-                  }
-                  className="mt-2"
-                />
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
+// Placeholder sections - will implement in next steps
+function RiskAssessmentsSection({ stats, chartData }: { stats: ReportStats; chartData: any[] }) {
+  return (
+    <div className="space-y-8">
+      <div>
+        <h2 className="text-2xl font-bold mb-2">Risk Assessments</h2>
+        <p className="text-muted-foreground">GBU and hazard analysis</p>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <KPICard
+          title="Total GBU"
+          subtitle="Risk assessments"
+          value={stats.totalRiskAssessments}
+          icon={<Shield className="w-5 h-5" />}
+          color="bg-orange-50 text-orange-600"
+        />
+      </div>
+    </div>
+  );
+}
 
-        {/* Training Matrix Tab */}
-        <TabsContent value="training">
-          <Card>
-            <CardHeader>
-              <CardTitle>Employee Training Compliance Matrix</CardTitle>
-              <CardDescription>
-                Complete overview of training status for all employees
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Employee Name</TableHead>
-                      <TableHead>Total Required</TableHead>
-                      <TableHead>Completed</TableHead>
-                      <TableHead>Expired</TableHead>
-                      <TableHead>Compliance Rate</TableHead>
-                      <TableHead>Status</TableHead>
+function AuditsSection({ stats, chartData }: { stats: ReportStats; chartData: any[] }) {
+  return (
+    <div className="space-y-8">
+      <div>
+        <h2 className="text-2xl font-bold mb-2">Safety Audits</h2>
+        <p className="text-muted-foreground">Audit completion and compliance</p>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <KPICard
+          title="Total Audits"
+          subtitle="All audits"
+          value={stats.totalAudits}
+          icon={<ClipboardCheck className="w-5 h-5" />}
+          color="bg-blue-50 text-blue-600"
+        />
+        <KPICard
+          title="Completed"
+          subtitle="Finished audits"
+          value={stats.completedAudits}
+          icon={<CheckCircle className="w-5 h-5" />}
+          color="bg-green-50 text-green-600"
+        />
+      </div>
+    </div>
+  );
+}
+
+function IncidentsSection({ stats, chartData }: { stats: ReportStats; chartData: any[] }) {
+  return (
+    <div className="space-y-8">
+      <div>
+        <h2 className="text-2xl font-bold mb-2">Incidents</h2>
+        <p className="text-muted-foreground">Workplace incident tracking</p>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <KPICard
+          title="Total Incidents"
+          subtitle="All incidents"
+          value={stats.totalIncidents}
+          icon={<AlertTriangle className="w-5 h-5" />}
+          color="bg-red-50 text-red-600"
+        />
+        <KPICard
+          title="Open Cases"
+          subtitle="Under investigation"
+          value={stats.openIncidents}
+          icon={<AlertTriangle className="w-5 h-5" />}
+          color="bg-orange-50 text-orange-600"
+        />
+        <KPICard
+          title="Closed"
+          subtitle="Resolved incidents"
+          value={stats.totalIncidents - stats.openIncidents}
+          icon={<CheckCircle className="w-5 h-5" />}
+          color="bg-green-50 text-green-600"
+        />
+      </div>
+    </div>
+  );
+}
+
+function TrainingsSection({
+  stats,
+  trainingMatrix,
+  chartData,
+}: {
+  stats: ReportStats;
+  trainingMatrix: TrainingStatus[];
+  chartData: any[];
+}) {
+  return (
+    <div className="space-y-8">
+      <div>
+        <h2 className="text-2xl font-bold mb-2">Trainings</h2>
+        <p className="text-muted-foreground">Employee training compliance</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <KPICard
+          title="Total Courses"
+          subtitle="Training programs"
+          value={stats.totalTrainings}
+          icon={<GraduationCap className="w-5 h-5" />}
+          color="bg-green-50 text-green-600"
+        />
+        <KPICard
+          title="Compliance Rate"
+          subtitle="Overall compliance"
+          value={`${stats.trainingCompliance}%`}
+          icon={<CheckCircle className="w-5 h-5" />}
+          color="bg-blue-50 text-blue-600"
+        />
+      </div>
+
+      {/* Training Matrix */}
+      <Card className="border shadow-sm">
+        <CardHeader>
+          <CardTitle>Employee Training Matrix</CardTitle>
+          <CardDescription>Training compliance by employee</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="rounded-lg border overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/50">
+                  <TableHead className="font-semibold">Employee Name</TableHead>
+                  <TableHead className="font-semibold">Required</TableHead>
+                  <TableHead className="font-semibold">Completed</TableHead>
+                  <TableHead className="font-semibold">Expired</TableHead>
+                  <TableHead className="font-semibold">Compliance</TableHead>
+                  <TableHead className="font-semibold">Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {trainingMatrix.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      No training data available
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  trainingMatrix.map((item, idx) => (
+                    <TableRow key={idx} className="hover:bg-muted/30">
+                      <TableCell className="font-medium">{item.employee_name}</TableCell>
+                      <TableCell>{item.total_required}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                          {item.completed}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {item.expired > 0 ? (
+                          <Badge variant="destructive">{item.expired}</Badge>
+                        ) : (
+                          <span className="text-muted-foreground">0</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="font-semibold">{item.compliance_rate}%</TableCell>
+                      <TableCell>
+                        {item.compliance_rate >= 80 ? (
+                          <Badge className="bg-green-100 text-green-800 border-green-200">
+                            Compliant
+                          </Badge>
+                        ) : item.compliance_rate >= 50 ? (
+                          <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">
+                            Needs Attention
+                          </Badge>
+                        ) : (
+                          <Badge variant="destructive">Non-Compliant</Badge>
+                        )}
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {trainingMatrix.length === 0 ? (
-                      <TableRow>
-                        <TableCell
-                          colSpan={6}
-                          className="text-center py-8 text-muted-foreground"
-                        >
-                          No training data available
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      trainingMatrix.map((item, idx) => (
-                        <TableRow key={idx}>
-                          <TableCell className="font-medium">
-                            {item.employee_name}
-                          </TableCell>
-                          <TableCell>{item.total_required}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="bg-green-50">
-                              {item.completed}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            {item.expired > 0 ? (
-                              <Badge variant="destructive">
-                                {item.expired}
-                              </Badge>
-                            ) : (
-                              <span className="text-muted-foreground">0</span>
-                            )}
-                          </TableCell>
-                          <TableCell>{item.compliance_rate}%</TableCell>
-                          <TableCell>
-                            {item.compliance_rate >= 80 ? (
-                              <Badge className="bg-green-100 text-green-800">
-                                Compliant
-                              </Badge>
-                            ) : item.compliance_rate >= 50 ? (
-                              <Badge className="bg-yellow-100 text-yellow-800">
-                                Needs Attention
-                              </Badge>
-                            ) : (
-                              <Badge variant="destructive">Non-Compliant</Badge>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
-        {/* Incidents Tab */}
-        <TabsContent value="incidents">
-          <Card>
-            <CardHeader>
-              <CardTitle>Incident Analytics</CardTitle>
-              <CardDescription>
-                Detailed incident reporting and trends
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="text-center">
-                      <AlertTriangle className="h-12 w-12 mx-auto mb-2 text-red-600" />
-                      <div className="text-3xl font-bold">
-                        {stats.totalIncidents}
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        Total Incidents
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="text-center">
-                      <BarChart3 className="h-12 w-12 mx-auto mb-2 text-orange-600" />
-                      <div className="text-3xl font-bold">
-                        {stats.openIncidents}
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        Under Investigation
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="text-center">
-                      <CheckCircle className="h-12 w-12 mx-auto mb-2 text-green-600" />
-                      <div className="text-3xl font-bold">
-                        {stats.totalIncidents - stats.openIncidents}
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        Closed Cases
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+function MeasuresSection({ stats, chartData }: { stats: ReportStats; chartData: any[] }) {
+  return (
+    <div className="space-y-8">
+      <div>
+        <h2 className="text-2xl font-bold mb-2">Measures</h2>
+        <p className="text-muted-foreground">Corrective and preventive actions</p>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <KPICard
+          title="Total Measures"
+          subtitle="All measures"
+          value={stats.totalMeasures}
+          icon={<CheckCircle className="w-5 h-5" />}
+          color="bg-purple-50 text-purple-600"
+        />
+        <KPICard
+          title="Completed"
+          subtitle="Finished measures"
+          value={stats.completedMeasures}
+          icon={<CheckCircle className="w-5 h-5" />}
+          color="bg-green-50 text-green-600"
+        />
+        <KPICard
+          title="In Progress"
+          subtitle="Active measures"
+          value={stats.totalMeasures - stats.completedMeasures}
+          icon={<TrendingUp className="w-5 h-5" />}
+          color="bg-orange-50 text-orange-600"
+        />
+      </div>
+    </div>
+  );
+}
 
-        {/* Measures Tab */}
-        <TabsContent value="measures">
-          <Card>
-            <CardHeader>
-              <CardTitle>Measures & Controls Overview</CardTitle>
-              <CardDescription>
-                Tracking of all corrective and preventive actions
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="text-center">
-                      <FileText className="h-12 w-12 mx-auto mb-2 text-blue-600" />
-                      <div className="text-3xl font-bold">
-                        {stats.totalMeasures}
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        Total Measures
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="text-center">
-                      <TrendingUp className="h-12 w-12 mx-auto mb-2 text-orange-600" />
-                      <div className="text-3xl font-bold">
-                        {stats.totalMeasures - stats.completedMeasures}
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        In Progress
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="text-center">
-                      <CheckCircle className="h-12 w-12 mx-auto mb-2 text-green-600" />
-                      <div className="text-3xl font-bold">
-                        {stats.completedMeasures}
-                      </div>
-                      <p className="text-sm text-muted-foreground">Completed</p>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+function TasksSection({ stats, chartData }: { stats: ReportStats; chartData: any[] }) {
+  return (
+    <div className="space-y-8">
+      <div>
+        <h2 className="text-2xl font-bold mb-2">Tasks</h2>
+        <p className="text-muted-foreground">Task management and completion</p>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <KPICard
+          title="Total Tasks"
+          subtitle="All tasks"
+          value={stats.totalTasks}
+          icon={<ListChecks className="w-5 h-5" />}
+          color="bg-indigo-50 text-indigo-600"
+        />
+        <KPICard
+          title="Completed"
+          subtitle="Finished tasks"
+          value={stats.completedTasks}
+          icon={<CheckCircle className="w-5 h-5" />}
+          color="bg-green-50 text-green-600"
+        />
+      </div>
+    </div>
+  );
+}
+
+function CheckupsSection({ stats }: { stats: ReportStats }) {
+  return (
+    <div className="space-y-8">
+      <div>
+        <h2 className="text-2xl font-bold mb-2">Health Check-ups</h2>
+        <p className="text-muted-foreground">Employee health monitoring</p>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <KPICard
+          title="Total Check-ups"
+          subtitle="Health monitoring"
+          value={stats.totalCheckUps}
+          icon={<Stethoscope className="w-5 h-5" />}
+          color="bg-teal-50 text-teal-600"
+        />
+      </div>
     </div>
   );
 }

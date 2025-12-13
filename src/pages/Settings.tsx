@@ -24,6 +24,14 @@ import {
   Target,
   Tag,
   Save,
+  Upload,
+  Loader2,
+  FileText,
+  RefreshCw,
+  ChevronDown,
+  ChevronRight,
+  Mail,
+  Send,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -90,6 +98,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
+import { sendMemberInvitation, sendNoteNotification } from "@/services/emailService";
 
 const baseSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -98,18 +107,18 @@ const baseSchema = z.object({
 
 export default function Settings() {
   const { user, loading, companyId, userRole } = useAuth();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [loadingData, setLoadingData] = useState(false);
-  const [activeTab, setActiveTab] = useState("team");
+  const [activeTab, setActiveTab] = useState("company");
+  const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(new Set());
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [deleteItem, setDeleteItem] = useState<any>(null);
   const [currentTableName, setCurrentTableName] = useState("");
   const [forceDialogOpen, setForceDialogOpen] = useState(false);
 
-  // State for each master data type
   const [departments, setDepartments] = useState<any[]>([]);
   const [locations, setLocations] = useState<any[]>([]);
   const [jobRoles, setJobRoles] = useState<any[]>([]);
@@ -117,6 +126,7 @@ export default function Settings() {
   const [riskCategories, setRiskCategories] = useState<any[]>([]);
   const [trainingTypes, setTrainingTypes] = useState<any[]>([]);
   const [auditCategories, setAuditCategories] = useState<any[]>([]);
+  const [measureBuildingBlocks, setMeasureBuildingBlocks] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
 
   // Approval Process State
@@ -134,9 +144,17 @@ export default function Settings() {
     Record<string, string[]>
   >({});
   const [newCriterionText, setNewCriterionText] = useState("");
+  const [newCriterionId, setNewCriterionId] = useState("");
   const [addingCriterionForISO, setAddingCriterionForISO] = useState<
     string | null
   >(null);
+  const [selectedCriteria, setSelectedCriteria] = useState<string[]>([]);
+
+  // ISO Criteria Import State
+  const [isoCriteriaData, setIsoCriteriaData] = useState<any>({});
+  const [importingISO, setImportingISO] = useState<string | null>(null);
+  const [expandedSections, setExpandedSections] = useState<string[]>([]);
+  const [activeISOForCriteria, setActiveISOForCriteria] = useState<string | null>(null);
 
   // G-Investigations State
   const [selectedGInvestigations, setSelectedGInvestigations] = useState<
@@ -158,97 +176,77 @@ export default function Settings() {
     { id: "ISO_50001", name: "ISO 50001", description: "Energy Management" },
   ];
 
-  // Predefined criteria for each ISO standard
+  // Predefined criteria for each ISO standard - 7 standard sections for all
   const predefinedCriteria: Record<
     string,
     { compact: string[]; complete: string[] }
   > = {
     ISO_45001: {
       compact: [
-        "Context of the organization",
-        "Leadership and worker participation",
-        "Planning",
-        "Support and operation",
+        "Kontext der Organisation",
+        "Führung",
+        "Planung",
+        "Unterstützung",
       ],
       complete: [
-        "Understanding the organization and its context",
-        "Understanding the needs and expectations of workers",
-        "OH&S policy",
-        "Roles, responsibilities and authorities",
-        "Consultation and participation of workers",
-        "Hazard identification and assessment of risks",
-        "Legal requirements and other requirements",
-        "OH&S objectives and planning",
-        "Resources, competence, awareness, communication",
-        "Documented information",
-        "Operational planning and control",
-        "Emergency preparedness and response",
+        "1 Kontext der Organisation",
+        "2 Führung (Leadership)",
+        "3 Planung",
+        "4 Unterstützung (Support)",
+        "5 Betrieb (Operation)",
+        "6 Bewertung der Leistung (Performance Evaluation)",
+        "7 Verbesserung (Improvement)",
       ],
     },
     ISO_14001: {
       compact: [
-        "Environmental policy",
-        "Environmental aspects",
-        "Legal and other requirements",
-        "Environmental objectives",
+        "Kontext der Organisation",
+        "Führung",
+        "Planung",
+        "Unterstützung",
       ],
       complete: [
-        "Understanding the organization and its context",
-        "Understanding stakeholder needs",
-        "Environmental management system scope",
-        "Environmental policy establishment",
-        "Environmental aspects identification",
-        "Compliance obligations",
-        "Environmental objectives and planning",
-        "Resources and competence",
-        "Awareness and communication",
-        "Operational control",
-        "Emergency preparedness",
-        "Monitoring and measurement",
+        "1 Kontext der Organisation",
+        "2 Führung (Leadership)",
+        "3 Planung",
+        "4 Unterstützung (Support)",
+        "5 Betrieb (Operation)",
+        "6 Bewertung der Leistung (Performance Evaluation)",
+        "7 Verbesserung (Improvement)",
       ],
     },
     ISO_9001: {
       compact: [
-        "Quality management system",
-        "Leadership commitment",
-        "Customer focus",
-        "Quality objectives",
+        "Kontext der Organisation",
+        "Führung",
+        "Planung",
+        "Unterstützung",
       ],
       complete: [
-        "Understanding the organization context",
-        "Understanding customer requirements",
-        "Quality policy",
-        "Quality objectives",
-        "Resources provision",
-        "Competence and awareness",
-        "Communication processes",
-        "Documented information control",
-        "Operational planning and control",
-        "Customer requirements determination",
-        "Design and development",
-        "Control of externally provided processes",
+        "1 Kontext der Organisation",
+        "2 Führung (Leadership)",
+        "3 Planung",
+        "4 Unterstützung (Support)",
+        "5 Betrieb (Operation)",
+        "6 Bewertung der Leistung (Performance Evaluation)",
+        "7 Verbesserung (Improvement)",
       ],
     },
     ISO_50001: {
       compact: [
-        "Energy policy",
-        "Energy planning",
-        "Energy performance",
-        "Energy baseline",
+        "Kontext der Organisation",
+        "Führung",
+        "Planung",
+        "Unterstützung",
       ],
       complete: [
-        "Understanding organization context",
-        "Understanding stakeholder needs",
-        "Energy management system scope",
-        "Energy policy",
-        "Energy review",
-        "Energy performance indicators",
-        "Energy baseline establishment",
-        "Energy objectives and targets",
-        "Action plans for targets",
-        "Competence and awareness",
-        "Operational control",
-        "Monitoring and measurement",
+        "1 Kontext der Organisation",
+        "2 Führung (Leadership)",
+        "3 Planung",
+        "4 Unterstützung (Support)",
+        "5 Betrieb (Operation)",
+        "6 Bewertung der Leistung (Performance Evaluation)",
+        "7 Verbesserung (Improvement)",
       ],
     },
   };
@@ -269,6 +267,7 @@ export default function Settings() {
       fetchApprovalWorkflows();
       fetchISOStandards();
       fetchGInvestigations();
+      fetchAllIsoCriteria();
     }
   }, [user, loading, navigate, companyId]);
 
@@ -277,33 +276,43 @@ export default function Settings() {
 
     setLoadingData(true);
     try {
-      const [depts, locs, roles, exposure, risk, training, audit, emps] =
-        await Promise.all([
-          supabase.from("departments").select("*").eq("company_id", companyId),
-          supabase.from("locations").select("*").eq("company_id", companyId),
-          supabase.from("job_roles").select("*").eq("company_id", companyId),
-          supabase
-            .from("exposure_groups")
-            .select("*")
-            .eq("company_id", companyId),
-          supabase
-            .from("risk_categories")
-            .select("*")
-            .eq("company_id", companyId),
-          supabase
-            .from("training_types")
-            .select("*")
-            .eq("company_id", companyId),
-          supabase
-            .from("audit_categories")
-            .select("*")
-            .eq("company_id", companyId),
-          supabase
-            .from("employees")
-            .select("id, full_name")
-            .eq("company_id", companyId)
-            .order("full_name"),
-        ]);
+      const [
+        depts,
+        locs,
+        roles,
+        exposure,
+        risk,
+        training,
+        audit,
+        measures,
+        emps,
+      ] = await Promise.all([
+        supabase.from("departments").select("*").eq("company_id", companyId),
+        supabase.from("locations").select("*").eq("company_id", companyId),
+        supabase.from("job_roles").select("*").eq("company_id", companyId),
+        supabase
+          .from("exposure_groups")
+          .select("*")
+          .eq("company_id", companyId),
+        supabase
+          .from("risk_categories")
+          .select("*")
+          .eq("company_id", companyId),
+        supabase.from("training_types").select("*").eq("company_id", companyId),
+        supabase
+          .from("audit_categories")
+          .select("*")
+          .eq("company_id", companyId),
+        supabase
+          .from("measure_building_blocks")
+          .select("*")
+          .eq("company_id", companyId),
+        supabase
+          .from("employees")
+          .select("id, full_name")
+          .eq("company_id", companyId)
+          .order("full_name"),
+      ]);
 
       setDepartments(depts.data || []);
       setLocations(locs.data || []);
@@ -312,6 +321,7 @@ export default function Settings() {
       setRiskCategories(risk.data || []);
       setTrainingTypes(training.data || []);
       setAuditCategories(audit.data || []);
+      setMeasureBuildingBlocks(measures.data || []);
       setEmployees(emps.data || []);
     } catch (err: unknown) {
       const e = err as { message?: string } | Error | null;
@@ -411,6 +421,8 @@ export default function Settings() {
 
       if (error) throw error;
 
+      console.log("Fetched ISO standards from DB:", data);
+
       const selected: string[] = [];
       const custom: string[] = [];
 
@@ -421,8 +433,38 @@ export default function Settings() {
         }
       });
 
+      console.log("Selected ISOs:", selected);
       setSelectedISOs(selected);
       setCustomISOs(custom);
+
+      // Set the first ISO as active for criteria display
+      if (selected.length > 0 && !activeISOForCriteria) {
+        setActiveISOForCriteria(selected[0]);
+      }
+
+      // Load selected criteria from localStorage
+      const savedCriteria = localStorage.getItem(
+        `selectedCriteria_${companyId}`
+      );
+      if (savedCriteria) {
+        try {
+          const parsedCriteria = JSON.parse(savedCriteria);
+          setSelectedCriteria(parsedCriteria);
+          console.log(
+            "Loaded selected criteria from localStorage:",
+            parsedCriteria.length,
+            "items"
+          );
+        } catch (e) {
+          console.error("Error parsing saved criteria:", e);
+        }
+      }
+
+      // Fetch criteria for each selected ISO
+      for (const isoCode of selected) {
+        console.log("Fetching criteria for:", isoCode);
+        await fetchIsoCriteria(isoCode);
+      }
     } catch (err: unknown) {
       console.error("Error fetching ISO standards:", err);
     }
@@ -553,6 +595,70 @@ export default function Settings() {
     setSelectedGInvestigations((prev) =>
       prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]
     );
+  };
+
+  const toggleSelectAll = () => {
+    const allCodes = [
+      "G 1.1",
+      "G 1.2",
+      "G 1.3",
+      "G 1.4",
+      "G 2",
+      "G 3",
+      "G 4",
+      "G 5",
+      "G 6",
+      "G 7",
+      "G 8",
+      "G 9",
+      "G 10",
+      "G 11",
+      "G 12",
+      "G 13",
+      "G 14",
+      "G 15",
+      "G 16",
+      "G 17",
+      "G 18",
+      "G 19",
+      "G 20",
+      "G 21",
+      "G 22",
+      "G 23",
+      "G 24",
+      "G 25",
+      "G 26",
+      "G 27",
+      "G 28",
+      "G 29",
+      "G 30",
+      "G 31",
+      "G 32",
+      "G 33",
+      "G 34",
+      "G 35",
+      "G 36",
+      "G 37",
+      "G 38",
+      "G 39",
+      "G 40",
+      "G 41",
+      "G 42",
+      "G 43",
+      "G 44",
+      "G 45",
+      "G 46",
+    ];
+
+    if (selectedGInvestigations.length === allCodes.length) {
+      setSelectedGInvestigations([]);
+    } else {
+      setSelectedGInvestigations(allCodes);
+    }
+  };
+
+  const isAllSelected = () => {
+    return selectedGInvestigations.length === 46;
   };
 
   const saveApprovalWorkflow = async (
@@ -850,6 +956,613 @@ export default function Settings() {
     }
   };
 
+  // Import ISO Criteria from JSON files
+  const importIsoCriteria = async (isoCode: string) => {
+    if (!companyId) {
+      toast({
+        title: "Error",
+        description: "Company ID not found",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setImportingISO(isoCode);
+
+    try {
+      // Load the appropriate JSON file
+      let jsonData;
+      if (isoCode === "ISO_9001") {
+        jsonData = await import("../data/iso_9001_2015_complete.json");
+      } else if (isoCode === "ISO_14001") {
+        jsonData = await import("../data/iso_14001_2015_complete.json");
+      } else if (isoCode === "ISO_45001") {
+        jsonData = await import("../data/iso_45001_2015_complete.json");
+      } else {
+        throw new Error("Unknown ISO code");
+      }
+
+      const data = jsonData.default || jsonData;
+
+      // Insert sections
+      for (const section of data.sections) {
+        const { data: sectionData, error: sectionError } = await supabase
+          .from("iso_criteria_sections")
+          .upsert(
+            {
+              iso_code: data.iso_code,
+              section_number: section.section_number,
+              title: section.title,
+              title_en: section.title, // Store English text in title_en
+              sort_order: section.sort_order,
+            },
+            { onConflict: "iso_code,section_number" }
+          )
+          .select()
+          .single();
+
+        if (sectionError) throw sectionError;
+
+        // Insert subsections
+        for (const subsection of section.subsections) {
+          const { data: subsectionData, error: subsectionError } =
+            await supabase
+              .from("iso_criteria_subsections")
+              .upsert(
+                {
+                  section_id: sectionData.id,
+                  subsection_number: subsection.subsection_number,
+                  title: subsection.title,
+                  title_en: subsection.title, // Store English text in title_en
+                  sort_order: subsection.sort_order,
+                },
+                { onConflict: "section_id,subsection_number" }
+              )
+              .select()
+              .single();
+
+          if (subsectionError) throw subsectionError;
+
+          // Insert questions
+          for (let i = 0; i < subsection.questions.length; i++) {
+            const { error: questionError } = await supabase
+              .from("iso_criteria_questions")
+              .upsert({
+                subsection_id: subsectionData.id,
+                question_text: subsection.questions[i],
+                question_text_en: subsection.questions[i], // Store English text in question_text_en
+                sort_order: i + 1,
+              });
+
+            if (questionError) throw questionError;
+          }
+        }
+      }
+
+      toast({
+        title: "Success",
+        description: `${data.iso_name} criteria imported successfully! (${data.total_criteria} criteria)`,
+      });
+
+      // Refresh the criteria data
+      await fetchIsoCriteria(isoCode);
+    } catch (error: any) {
+      console.error("Error importing ISO criteria:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to import ISO criteria",
+        variant: "destructive",
+      });
+    } finally {
+      setImportingISO(null);
+    }
+  };
+
+  // Fetch ISO Criteria from database
+  const fetchIsoCriteria = async (isoCode: string) => {
+    try {
+      const { data: sections, error } = await supabase
+        .from("iso_criteria_sections")
+        .select(
+          `
+          *,
+          subsections:iso_criteria_subsections(
+            *,
+            questions:iso_criteria_questions(*)
+          )
+        `
+        )
+        .eq("iso_code", isoCode)
+        .order("sort_order");
+
+      if (error) throw error;
+
+      setIsoCriteriaData((prev: any) => ({
+        ...prev,
+        [isoCode]: sections,
+      }));
+    } catch (error: any) {
+      console.error("Error fetching ISO criteria:", error);
+    }
+  };
+
+  // Add custom criterion to the selected ISO
+  const handleAddCustomCriterion = async () => {
+    if (!activeISOForCriteria || !newCriterionId.trim() || !newCriterionText.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter both Criterion ID and Title",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Find the section number from the criterion ID (e.g., "1.2.3" -> section "1")
+      // If not a valid number, default to section 7 (Verbesserung/Custom)
+      const firstPart = newCriterionId.split(".")[0];
+      const sectionNumber = /^[1-7]$/.test(firstPart) ? firstPart : "7";
+      
+      // Get the section ID for this ISO and section number
+      const { data: sectionData, error: sectionError } = await supabase
+        .from("iso_criteria_sections")
+        .select("id")
+        .eq("iso_code", activeISOForCriteria)
+        .eq("section_number", sectionNumber)
+        .single();
+
+      if (sectionError || !sectionData) {
+        toast({
+          title: "Error",
+          description: `Could not find section for this ISO. Please try again.`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Get the max sort_order for this section
+      const { data: existingSubsections } = await supabase
+        .from("iso_criteria_subsections")
+        .select("sort_order")
+        .eq("section_id", sectionData.id)
+        .order("sort_order", { ascending: false })
+        .limit(1);
+
+      const nextSortOrder = (existingSubsections?.[0]?.sort_order || 0) + 1;
+
+      // Insert the new subsection
+      const { error: insertError } = await supabase
+        .from("iso_criteria_subsections")
+        .insert({
+          section_id: sectionData.id,
+          subsection_number: newCriterionId,
+          title: newCriterionText,
+          title_en: newCriterionText,
+          company_id: companyId,  // Mark as custom criteria for this company
+          sort_order: nextSortOrder,
+        });
+
+      if (insertError) throw insertError;
+
+      toast({
+        title: "Success",
+        description: "Custom criterion added successfully",
+      });
+
+      // Reset inputs
+      setNewCriterionId("");
+      setNewCriterionText("");
+
+      // Refresh the criteria data
+      await fetchIsoCriteria(activeISOForCriteria);
+    } catch (error: any) {
+      console.error("Error adding custom criterion:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add custom criterion",
+        variant: "destructive",
+      });
+    }
+  };
+
+
+  // Delete a criterion by ID
+  const handleDeleteCriterion = async (subsectionId: string) => {
+    if (!activeISOForCriteria) return;
+
+    try {
+      const { data, error, count } = await supabase
+        .from("iso_criteria_subsections")
+        .delete()
+        .eq("id", subsectionId)
+        .select();
+
+      console.log("Delete result:", { data, error, count, subsectionId });
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Criterion deleted successfully",
+      });
+
+      // Manually remove from state for instant UI update
+      const isoCodeMap: { [key: string]: string } = {
+        ISO_45001: "ISO_45001",
+        ISO_14001: "ISO_14001",
+        ISO_9001: "ISO_9001",
+        ISO_50001: "ISO_50001",
+      };
+      const isoCode = isoCodeMap[activeISOForCriteria];
+      
+      if (isoCode && isoCriteriaData[isoCode]) {
+        const updatedSections = isoCriteriaData[isoCode].map((section: any) => ({
+          ...section,
+          subsections: section.subsections?.filter((sub: any) => sub.id !== subsectionId) || []
+        }));
+        
+        setIsoCriteriaData((prev: any) => ({
+          ...prev,
+          [isoCode]: updatedSections
+        }));
+      }
+    } catch (error: any) {
+      console.error("Error deleting criterion:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete criterion",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Delete multiple criteria by IDs (for batch delete)
+  const handleDeleteCriteriaBatch = async (subsectionIds: string[]) => {
+    if (!activeISOForCriteria || subsectionIds.length === 0) return;
+
+    try {
+      const { error } = await supabase
+        .from("iso_criteria_subsections")
+        .delete()
+        .in("id", subsectionIds);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: `${subsectionIds.length} criterion(s) deleted successfully`,
+      });
+
+      // Manually remove from state for instant UI update
+      const isoCodeMap: { [key: string]: string } = {
+        ISO_45001: "ISO_45001",
+        ISO_14001: "ISO_14001",
+        ISO_9001: "ISO_9001",
+        ISO_50001: "ISO_50001",
+      };
+      const isoCode = isoCodeMap[activeISOForCriteria];
+      
+      if (isoCode && isoCriteriaData[isoCode]) {
+        const updatedSections = isoCriteriaData[isoCode].map((section: any) => ({
+          ...section,
+          subsections: section.subsections?.filter((sub: any) => !subsectionIds.includes(sub.id)) || []
+        }));
+        
+        setIsoCriteriaData((prev: any) => ({
+          ...prev,
+          [isoCode]: updatedSections
+        }));
+      }
+    } catch (error: any) {
+      console.error("Error deleting criteria:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete criteria",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Delete a section/group and all its subsections by section number
+  const handleDeleteSection = async (sectionNumber: string) => {
+    if (!activeISOForCriteria) return;
+
+    try {
+      // For custom items (non-numeric), delete subsections by their subsection_number pattern
+      if (!/^[1-7]$/.test(sectionNumber)) {
+        // Get all section IDs for this ISO
+        const { data: sectionsData } = await supabase
+          .from("iso_criteria_sections")
+          .select("id")
+          .eq("iso_code", activeISOForCriteria);
+
+        if (sectionsData && sectionsData.length > 0) {
+          const sectionIds = sectionsData.map(s => s.id);
+          
+          // Delete subsections where subsection_number starts with this prefix
+          const { error } = await supabase
+            .from("iso_criteria_subsections")
+            .delete()
+            .in("section_id", sectionIds)
+            .ilike("subsection_number", `${sectionNumber}%`);
+
+          if (error) throw error;
+        }
+
+        toast({
+          title: "Success",
+          description: "Custom criterion deleted successfully",
+        });
+
+        // Refresh the criteria data
+        await fetchIsoCriteria(activeISOForCriteria);
+        return;
+      }
+
+      // For standard sections (1-7), get the section ID
+      const { data: sectionData, error: sectionError } = await supabase
+        .from("iso_criteria_sections")
+        .select("id")
+        .eq("iso_code", activeISOForCriteria)
+        .eq("section_number", sectionNumber)
+        .single();
+
+      if (sectionError || !sectionData) {
+        throw new Error("Section not found");
+      }
+
+      // Delete all subsections first
+      await supabase
+        .from("iso_criteria_subsections")
+        .delete()
+        .eq("section_id", sectionData.id);
+
+      // Delete the section
+      const { error } = await supabase
+        .from("iso_criteria_sections")
+        .delete()
+        .eq("id", sectionData.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Section deleted successfully",
+      });
+
+      // Refresh the criteria data
+      await fetchIsoCriteria(activeISOForCriteria);
+    } catch (error: any) {
+      console.error("Error deleting section:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete section",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Fetch all imported ISO criteria on page load
+  const fetchAllIsoCriteria = async () => {
+    try {
+      // Check which ISO standards have been imported
+      const { data: sections, error } = await supabase
+        .from("iso_criteria_sections")
+        .select("iso_code")
+        .limit(1);
+
+      if (error) throw error;
+
+      if (sections && sections.length > 0) {
+        // Get unique ISO codes
+        const { data: allSections } = await supabase
+          .from("iso_criteria_sections")
+          .select("iso_code");
+
+        const uniqueIsoCodes = [
+          ...new Set(allSections?.map((s) => s.iso_code) || []),
+        ];
+
+        // Fetch criteria for each imported ISO
+        for (const isoCode of uniqueIsoCodes) {
+          await fetchIsoCriteria(isoCode as string);
+        }
+      }
+    } catch (error: any) {
+      console.error("Error fetching all ISO criteria:", error);
+    }
+  };
+
+  // Update English translations for existing ISO criteria data
+  const updateEnglishTranslations = async () => {
+    try {
+      setLoadingData(true);
+
+      toast({
+        title: "Updating translations...",
+        description:
+          "Deleting old data and re-importing with English translations",
+      });
+
+      // Get list of imported ISO codes
+      const { data: existingISOs } = await supabase
+        .from("iso_criteria_sections")
+        .select("iso_code");
+
+      const uniqueIsoCodes = [
+        ...new Set(existingISOs?.map((s) => s.iso_code) || []),
+      ];
+
+      if (uniqueIsoCodes.length === 0) {
+        toast({
+          title: "No data found",
+          description:
+            "No ISO criteria found in database. Please import ISO standards first.",
+          variant: "destructive",
+        });
+        setLoadingData(false);
+        return;
+      }
+
+      // Delete existing data and re-import for each ISO standard
+      for (const isoCode of uniqueIsoCodes) {
+        // Delete existing sections (cascade will delete subsections and questions)
+        await supabase
+          .from("iso_criteria_sections")
+          .delete()
+          .eq("iso_code", isoCode);
+
+        // Re-import with updated function that includes English translations
+        await importIsoCriteria(isoCode as string);
+      }
+
+      toast({
+        title: "Success!",
+        description: `ISO criteria re-imported successfully with English translations for ${uniqueIsoCodes.length} standard(s)!`,
+      });
+
+      // Refresh the data
+      await fetchAllIsoCriteria();
+    } catch (error: any) {
+      console.error("Error updating English translations:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update English translations",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingData(false);
+    }
+  };
+
+  // Add German translations to ISO criteria
+  const addGermanTranslations = async () => {
+    try {
+      setLoadingData(true);
+
+      toast({
+        title: "Adding German translations...",
+        description: "Updating ISO criteria with German text",
+      });
+
+      // German translations for ISO 45001 sections
+      const germanSections: Record<string, string> = {
+        "1": "Kontext der Organisation",
+        "2": "Führung (Leadership)",
+        "3": "Planung",
+        "4": "Unterstützung",
+        "5": "Betrieb",
+        "6": "Bewertung der Leistung",
+        "7": "Verbesserung",
+        "8": "Glossar",
+      };
+
+      // German translations for ISO 45001 subsections
+      const germanSubsections: Record<string, string> = {
+        "1.1": "Externe und interne Themen identifizieren",
+        "1.2": "Interessierte Parteien und deren Anforderungen",
+        "1.3": "Anwendungsbereich des Arbeitsschutzmanagementsystems",
+        "1.4": "Managementsystem und Schnittstellen",
+        "2.1": "Verantwortung und Verpflichtung der obersten Leitung",
+        "2.2": "Arbeitsschutzpolitik",
+        "2.3": "Rollen, Verantwortlichkeiten und Befugnisse",
+        "2.4": "Beteiligung und Konsultation der Beschäftigten",
+        "2.5": "Besondere Beauftragte und Fachfunktionen",
+        "3.1": "Maßnahmen zum Umgang mit Risiken und Chancen",
+        "3.2": "Rechtliche und andere Anforderungen",
+        "3.3": "Arbeitsschutzziele",
+        "3.4": "Notfall- und Krisenplanung",
+        "3.6": "Detaillierte Zielplanung",
+        "4.1": "Ressourcenmanagement & Budget",
+        "4.2": "Kompetenz und Qualifikation",
+        "4.3": "Bewusstsein und Kommunikation",
+        "4.4": "Dokumentierte Information",
+        "4.5": "Wissensmanagement",
+        "4.6": "Kommunikation & Dokumentation",
+        "5.1": "Betriebliche Planung und Steuerung",
+        "5.2": "Gefährdungsbeurteilung & Schutzmaßnahmen",
+        "5.3": "Management of Change",
+        "5.4": "Beschaffung & Lieferantenmanagement",
+        "5.5": "Notfallvorsorge und Gefahrenabwehr",
+        "5.6": "Instandhaltungsmanagement",
+        "5.7": "Betriebliche Steuerung und Prozessorganisation",
+        "5.9": "Sicherheits- und Gesundheitsmanagement",
+        "5.10": "Nachhaltigkeit und Umweltschutz",
+        "6.1": "Überwachung, Messung, Analyse",
+        "6.2": "Interne Audits",
+        "6.3": "Managementbewertung",
+        "6.4": "Feedback & Lernen",
+        "7.1": "Kontinuierliche Verbesserung",
+        "7.2": "Nichtkonformitäten & Korrekturmaßnahmen",
+        "7.3": "Management psychosozialer Risiken",
+        "7.4": "Lessons Learned",
+        "7.5": "Compliance & Ethik",
+        "7.6": "Innovation und Gesundheitsprogramme",
+        "8.1": "Zusätzliche Informationen",
+      };
+
+      let updatedCount = 0;
+
+      // Update sections
+      const { data: sections } = await supabase
+        .from("iso_criteria_sections")
+        .select("id, section_number")
+        .eq("iso_code", "ISO_45001");
+
+      for (const section of sections || []) {
+        const germanTitle = germanSections[section.section_number];
+        if (germanTitle) {
+          await supabase
+            .from("iso_criteria_sections")
+            .update({ title: germanTitle })
+            .eq("id", section.id);
+          updatedCount++;
+        }
+      }
+
+      // Update subsections
+      const { data: subsections } = await supabase
+        .from("iso_criteria_subsections")
+        .select(
+          `
+          id,
+          subsection_number,
+          section_id,
+          iso_criteria_sections!inner(iso_code)
+        `
+        )
+        .eq("iso_criteria_sections.iso_code", "ISO_45001");
+
+      for (const subsection of subsections || []) {
+        const germanTitle = germanSubsections[subsection.subsection_number];
+        if (germanTitle) {
+          await supabase
+            .from("iso_criteria_subsections")
+            .update({ title: germanTitle })
+            .eq("id", subsection.id);
+          updatedCount++;
+        }
+      }
+
+      toast({
+        title: "Success!",
+        description: `German translations added successfully! (${updatedCount} items updated)`,
+      });
+
+      // Refresh the data
+      await fetchAllIsoCriteria();
+    } catch (error: any) {
+      console.error("Error adding German translations:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add German translations",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingData(false);
+    }
+  };
+
   const handleDialogClose = () => {
     setIsDialogOpen(false);
     setEditingItem(null);
@@ -926,7 +1639,7 @@ export default function Settings() {
       audits: false,
       settings: false,
     },
-    External: {
+    User: {
       dashboard: false,
       employees: false,
       healthCheckups: false,
@@ -977,7 +1690,7 @@ export default function Settings() {
             "HSE Manager",
             "Doctor",
             "Employee",
-            "External",
+            "User",
           ].includes(roleName),
         },
         { onConflict: "company_id,role_name" }
@@ -1079,7 +1792,7 @@ export default function Settings() {
       "HSE Manager",
       "Doctor",
       "Employee",
-      "External",
+      "User",
     ];
 
     if (predefinedRoles.includes(roleName)) {
@@ -1430,7 +2143,6 @@ export default function Settings() {
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
-                <TableHead>Description</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -1438,7 +2150,7 @@ export default function Settings() {
               {data.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={3}
+                    colSpan={2}
                     className="text-center py-8 text-muted-foreground"
                   >
                     No items found. Click "Add {title.slice(0, -1)}" to create
@@ -1450,9 +2162,6 @@ export default function Settings() {
                   <TableRow key={item.id}>
                     <TableCell className="font-medium">
                       {item.name || item.title}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {item.description || "-"}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
@@ -1788,7 +2497,6 @@ export default function Settings() {
                               <TableHead>{t("settings.name")}</TableHead>
                               <TableHead>{t("settings.email")}</TableHead>
                               <TableHead>{t("settings.role")}</TableHead>
-                              <TableHead>{t("settings.status")}</TableHead>
                               <TableHead className="text-right">
                                 {t("common.actions")}
                               </TableHead>
@@ -1798,7 +2506,7 @@ export default function Settings() {
                             {teamMembers.length === 0 ? (
                               <TableRow>
                                 <TableCell
-                                  colSpan={5}
+                                  colSpan={4}
                                   className="text-center py-8 text-muted-foreground"
                                 >
                                   {t("settings.noTeamMembers")}
@@ -1816,49 +2524,108 @@ export default function Settings() {
                                       {member.role}
                                     </Badge>
                                   </TableCell>
-                                  <TableCell>
-                                    <Badge
-                                      variant={
-                                        member.status === "active"
-                                          ? "default"
-                                          : member.status === "pending"
-                                          ? "secondary"
-                                          : "outline"
-                                      }
-                                    >
-                                      {member.status}
-                                    </Badge>
-                                  </TableCell>
                                   <TableCell className="text-right">
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={async () => {
-                                        try {
-                                          const { error } = await supabase
-                                            .from("team_members")
-                                            .delete()
-                                            .eq("id", member.id);
+                                    <div className="flex justify-end gap-2">
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={async () => {
+                                              try {
+                                                await sendMemberInvitation(
+                                                  member.id,
+                                                  member.email,
+                                                  `${member.first_name} ${member.last_name}`
+                                                );
+                                                toast({
+                                                  title: "Success",
+                                                  description: "Invitation email sent successfully",
+                                                });
+                                              } catch (err: any) {
+                                                toast({
+                                                  title: "Error",
+                                                  description: err.message || "Failed to send invitation",
+                                                  variant: "destructive",
+                                                });
+                                              }
+                                            }}
+                                          >
+                                            <Send className="w-4 h-4" />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Send Invite</TooltipContent>
+                                      </Tooltip>
 
-                                          if (error) throw error;
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={async () => {
+                                              try {
+                                                const { data: { user } } = await supabase.auth.getUser();
+                                                const currentUserName = user?.user_metadata?.full_name || "Admin";
+                                                
+                                                await sendNoteNotification(
+                                                  member.email,
+                                                  `${member.first_name} ${member.last_name}`,
+                                                  "You have been mentioned in a note. Please check HSE Hub for details.",
+                                                  currentUserName
+                                                );
+                                                toast({
+                                                  title: "Success",
+                                                  description: "Notification email sent successfully",
+                                                });
+                                              } catch (err: any) {
+                                                toast({
+                                                  title: "Error",
+                                                  description: err.message || "Failed to send notification",
+                                                  variant: "destructive",
+                                                });
+                                              }
+                                            }}
+                                          >
+                                            <Mail className="w-4 h-4" />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Send Mail</TooltipContent>
+                                      </Tooltip>
 
-                                          toast({
-                                            title: "Success",
-                                            description:
-                                              "Team member removed successfully",
-                                          });
-                                          fetchTeamMembers();
-                                        } catch (err: any) {
-                                          toast({
-                                            title: "Error",
-                                            description: err.message,
-                                            variant: "destructive",
-                                          });
-                                        }
-                                      }}
-                                    >
-                                      <Trash2 className="w-4 h-4" />
-                                    </Button>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={async () => {
+                                              try {
+                                                const { error } = await supabase
+                                                  .from("team_members")
+                                                  .delete()
+                                                  .eq("id", member.id);
+
+                                                if (error) throw error;
+
+                                                toast({
+                                                  title: "Success",
+                                                  description: "Team member removed successfully",
+                                                });
+                                                fetchTeamMembers();
+                                              } catch (err: any) {
+                                                toast({
+                                                  title: "Error",
+                                                  description: err.message,
+                                                  variant: "destructive",
+                                                });
+                                              }
+                                            }}
+                                          >
+                                            <Trash2 className="w-4 h-4" />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Delete</TooltipContent>
+                                      </Tooltip>
+                                    </div>
                                   </TableCell>
                                 </TableRow>
                               ))
@@ -2562,34 +3329,12 @@ export default function Settings() {
                               <TableRow>
                                 <TableHead>Category</TableHead>
                                 <TableHead>Type</TableHead>
-                                <TableHead>Description</TableHead>
                                 <TableHead className="text-right">
                                   Actions
                                 </TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {/* Predefined Categories */}
-                              {["Low", "Medium", "High", "Very High"].map(
-                                (cat) => (
-                                  <TableRow key={cat}>
-                                    <TableCell className="font-medium">
-                                      {cat}
-                                    </TableCell>
-                                    <TableCell>
-                                      <Badge variant="secondary">
-                                        {t("settings.predefined")}
-                                      </Badge>
-                                    </TableCell>
-                                    <TableCell className="text-muted-foreground">
-                                      -
-                                    </TableCell>
-                                    <TableCell className="text-right text-muted-foreground text-xs">
-                                      Cannot delete
-                                    </TableCell>
-                                  </TableRow>
-                                )
-                              )}
                               {/* Custom Categories */}
                               {riskCategories
                                 .filter(
@@ -2608,9 +3353,6 @@ export default function Settings() {
                                     </TableCell>
                                     <TableCell>
                                       <Badge>{t("settings.custom")}</Badge>
-                                    </TableCell>
-                                    <TableCell className="text-muted-foreground">
-                                      {cat.description || "-"}
                                     </TableCell>
                                     <TableCell className="text-right">
                                       <div className="flex justify-end gap-2">
@@ -2666,31 +3408,65 @@ export default function Settings() {
                         <div className="flex gap-2">
                           <Input
                             placeholder="Enter measure building block name..."
-                            onKeyDown={(e) => {
+                            onKeyDown={async (e) => {
                               if (e.key === "Enter") {
                                 const input = e.currentTarget;
                                 const value = input.value.trim();
-                                if (value) {
-                                  toast({
-                                    title: "Success",
-                                    description: `Measure building block "${value}" added`,
-                                  });
-                                  input.value = "";
+                                if (value && companyId) {
+                                  const { error } = await supabase
+                                    .from("measure_building_blocks")
+                                    .insert([
+                                      {
+                                        name: value,
+                                        company_id: companyId,
+                                      },
+                                    ]);
+                                  if (error) {
+                                    toast({
+                                      title: "Error",
+                                      description: error.message,
+                                      variant: "destructive",
+                                    });
+                                  } else {
+                                    toast({
+                                      title: "Success",
+                                      description: `Measure building block "${value}" added`,
+                                    });
+                                    input.value = "";
+                                    fetchAllData();
+                                  }
                                 }
                               }
                             }}
                           />
                           <Button
-                            onClick={(e) => {
+                            onClick={async (e) => {
                               const input = e.currentTarget
                                 .previousElementSibling as HTMLInputElement;
                               const value = input?.value.trim();
-                              if (value) {
-                                toast({
-                                  title: "Success",
-                                  description: `Measure building block "${value}" added`,
-                                });
-                                if (input) input.value = "";
+                              if (value && companyId) {
+                                const { error } = await supabase
+                                  .from("measure_building_blocks")
+                                  .insert([
+                                    {
+                                      name: value,
+                                      company_id: companyId,
+                                    },
+                                  ]);
+                                if (error) {
+                                  toast({
+                                    title: "Error",
+                                    description: error.message,
+                                    variant: "destructive",
+                                  });
+                                } else {
+                                  toast({
+                                    title: "Success",
+                                    description: `Measure building block "${value}" added`,
+                                  });
+                                  if (input) input.value = "";
+                                  fetchAllData();
+                                }
                               }
                             }}
                           >
@@ -2702,12 +3478,79 @@ export default function Settings() {
                           Add reusable measure templates like Elimination,
                           Substitution, Engineering Controls, etc.
                         </p>
+
+                        {/* Measure Building Blocks List */}
+                        <div className="rounded-md border">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Name</TableHead>
+                                <TableHead className="text-right">
+                                  Actions
+                                </TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {measureBuildingBlocks.length === 0 ? (
+                                <TableRow>
+                                  <TableCell
+                                    colSpan={2}
+                                    className="text-center py-8 text-muted-foreground"
+                                  >
+                                    No measure building blocks found. Add your
+                                    first block above.
+                                  </TableCell>
+                                </TableRow>
+                              ) : (
+                                measureBuildingBlocks.map((block) => (
+                                  <TableRow key={block.id}>
+                                    <TableCell className="font-medium">
+                                      {block.name}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                      <div className="flex justify-end gap-2">
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          onClick={async () => {
+                                            if (!companyId) return;
+                                            const { error } = await supabase
+                                              .from("measure_building_blocks")
+                                              .delete()
+                                              .eq("id", block.id)
+                                              .eq("company_id", companyId);
+
+                                            if (error) {
+                                              toast({
+                                                title: "Error",
+                                                description: error.message,
+                                                variant: "destructive",
+                                              });
+                                            } else {
+                                              toast({
+                                                title: "Success",
+                                                description:
+                                                  "Measure building block deleted",
+                                              });
+                                              fetchAllData();
+                                            }
+                                          }}
+                                        >
+                                          <Trash2 className="w-4 h-4 text-destructive" />
+                                        </Button>
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                ))
+                              )}
+                            </TableBody>
+                          </Table>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
 
-                  {/* Audit Categories - Moved from Intervals tab */}
-                  {renderTable(auditCategories, t("settings.auditCategories"))}
+                  {/* Risk Matrix Label - Moved from Intervals tab */}
 
                   {/* ISO Selection moved to Intervals tab */}
                 </div>
@@ -2719,396 +3562,686 @@ export default function Settings() {
                   {/* ISO Selection & Criteria - Moved from Catalogs */}
                   <Card>
                     <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <Tag className="w-5 h-5" />
-                        {t("settings.isoSelection")}
-                      </CardTitle>
-                      <CardDescription>
-                        {t("settings.isoSelectionDesc")}
-                      </CardDescription>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <CardTitle className="text-2xl font-bold">
+                            Audits & checklists
+                          </CardTitle>
+                        </div>
+                        <Badge className="bg-green-600 text-white hover:bg-green-700 px-4 py-1 text-sm">
+                          Active
+                        </Badge>
+                      </div>
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-6">
                         {/* ISO Selection */}
-                        <div className="space-y-4">
-                          <h4 className="font-medium">
-                            {t("settings.selectISOStandards")}
-                          </h4>
-                          <div className="grid grid-cols-2 gap-3">
-                            {predefinedISOs.map((iso) => (
-                              <div
-                                key={iso.id}
-                                className="flex items-start gap-3 p-3 border rounded-lg hover:bg-muted/30"
-                              >
-                                <input
-                                  type="checkbox"
-                                  id={iso.id}
-                                  checked={selectedISOs.includes(iso.id)}
-                                  onChange={async (e) => {
-                                    if (e.target.checked) {
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-semibold text-base">
+                              ISO Selection
+                            </h4>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={async () => {
+                                  // Select all predefined ISOs
+                                  const allISOIds = predefinedISOs.map(
+                                    (iso) => iso.id
+                                  );
+
+                                  // Save all to database
+                                  for (const iso of predefinedISOs) {
+                                    if (!selectedISOs.includes(iso.id)) {
                                       await saveISOStandard(
                                         iso.id,
                                         iso.name,
                                         false
                                       );
-                                      setSelectedISOs([
-                                        ...selectedISOs,
-                                        iso.id,
-                                      ]);
-                                    } else {
-                                      await deleteISOStandard(iso.id);
-                                      setSelectedISOs(
-                                        selectedISOs.filter(
-                                          (id) => id !== iso.id
-                                        )
-                                      );
+                                      await fetchIsoCriteria(iso.id);
                                     }
-                                  }}
-                                  className="w-4 h-4 mt-0.5 cursor-pointer"
+                                  }
+
+                                  setSelectedISOs(allISOIds);
+
+                                  toast({
+                                    title: "Success",
+                                    description: "All ISOs selected and saved",
+                                  });
+                                }}
+                              >
+                                Select All
+                              </Button>
+                              <Button
+                                variant="default"
+                                size="sm"
+                                className="bg-green-600 hover:bg-green-700 text-white"
+                                onClick={async () => {
+                                  toast({
+                                    title: "Saved",
+                                    description:
+                                      "ISO selection saved successfully",
+                                  });
+                                  await fetchISOStandards();
+                                }}
+                              >
+                                <Save className="w-4 h-4 mr-2" />
+                                Save
+                              </Button>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-3">
+                            {predefinedISOs.map((iso) => (
+                              <div
+                                key={iso.id}
+                                className={`flex items-center gap-2 px-4 py-2 rounded border-2 cursor-pointer transition-colors ${
+                                  selectedISOs.includes(iso.id)
+                                    ? "bg-blue-600 text-white border-blue-600"
+                                    : "bg-white border-gray-300 hover:border-blue-400"
+                                }`}
+                                onClick={async () => {
+                                  const isSelected = selectedISOs.includes(
+                                    iso.id
+                                  );
+                                  if (!isSelected) {
+                                    await saveISOStandard(
+                                      iso.id,
+                                      iso.name,
+                                      false
+                                    );
+                                    setSelectedISOs([...selectedISOs, iso.id]);
+                                    setActiveISOForCriteria(iso.id); // Set as active ISO
+                                    await fetchIsoCriteria(iso.id);
+                                    toast({
+                                      title: "ISO Selected",
+                                      description: `${iso.name} has been activated`,
+                                    });
+                                  } else {
+                                    await deleteISOStandard(iso.id);
+                                    const newSelectedISOs = selectedISOs.filter((id) => id !== iso.id);
+                                    setSelectedISOs(newSelectedISOs);
+                                    // If we're deselecting the active ISO, set the first remaining ISO as active
+                                    if (activeISOForCriteria === iso.id) {
+                                      setActiveISOForCriteria(newSelectedISOs.length > 0 ? newSelectedISOs[0] : null);
+                                    }
+                                    toast({
+                                      title: "ISO Deselected",
+                                      description: `${iso.name} has been deactivated`,
+                                    });
+                                  }
+                                }}
+                              >
+                                <input
+                                  type="checkbox"
+                                  id={iso.id}
+                                  checked={selectedISOs.includes(iso.id)}
+                                  onChange={() => {}}
+                                  className="w-4 h-4 cursor-pointer"
                                 />
                                 <label
                                   htmlFor={iso.id}
-                                  className="cursor-pointer flex-1"
+                                  className="cursor-pointer font-medium"
                                 >
-                                  <div className="font-medium">{iso.name}</div>
-                                  <div className="text-xs text-muted-foreground">
-                                    {iso.description}
-                                  </div>
+                                  {iso.name.replace("ISO ", "ISO ")}
                                 </label>
+                                <span className="text-sm">
+                                  {selectedISOs.includes(iso.id)
+                                    ? "active"
+                                    : "active"}
+                                </span>
+                              </div>
+                            ))}
+
+                            {/* Custom ISOs Display */}
+                            {customISOs.map((iso, index) => (
+                              <div
+                                key={index}
+                                className={`flex items-center gap-2 px-4 py-2 rounded border-2 cursor-pointer transition-colors ${
+                                  selectedISOs.includes(iso)
+                                    ? "bg-white text-black border-gray-400"
+                                    : "bg-white border-gray-300"
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={selectedISOs.includes(iso)}
+                                  onChange={async (e) => {
+                                    if (e.target.checked) {
+                                      await saveISOStandard(iso, iso, true);
+                                      setSelectedISOs([...selectedISOs, iso]);
+                                    } else {
+                                      await deleteISOStandard(iso);
+                                      setSelectedISOs(
+                                        selectedISOs.filter((id) => id !== iso)
+                                      );
+                                    }
+                                  }}
+                                  className="w-4 h-4 cursor-pointer"
+                                />
+                                <span className="font-medium">{iso}</span>
+                                <span className="text-sm">active</span>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="ml-auto h-6 w-6 p-0"
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    await deleteISOStandard(iso);
+                                    setCustomISOs(
+                                      customISOs.filter((_, i) => i !== index)
+                                    );
+                                    setSelectedISOs(
+                                      selectedISOs.filter((id) => id !== iso)
+                                    );
+                                  }}
+                                >
+                                  <X className="w-4 h-4" />
+                                </Button>
                               </div>
                             ))}
                           </div>
                         </div>
 
-                        {/* Custom ISOs */}
-                        <div className="space-y-3">
-                          <h4 className="font-medium">
-                            {t("settings.customISOStandards")}
-                          </h4>
-                          <div className="flex gap-2">
-                            <Input
-                              placeholder={t("settings.enterISOName")}
-                              value={newCustomISO}
-                              onChange={(e) => setNewCustomISO(e.target.value)}
-                              onKeyDown={async (e) => {
-                                if (e.key === "Enter" && newCustomISO.trim()) {
-                                  await saveISOStandard(
-                                    newCustomISO.trim(),
-                                    newCustomISO.trim(),
-                                    true
-                                  );
-                                  setCustomISOs([
-                                    ...customISOs,
-                                    newCustomISO.trim(),
-                                  ]);
-                                  setSelectedISOs([
-                                    ...selectedISOs,
-                                    newCustomISO.trim(),
-                                  ]);
-                                  setNewCustomISO("");
-                                }
-                              }}
-                            />
-                            <Button
-                              onClick={async () => {
-                                if (newCustomISO.trim()) {
-                                  await saveISOStandard(
-                                    newCustomISO.trim(),
-                                    newCustomISO.trim(),
-                                    true
-                                  );
-                                  setCustomISOs([
-                                    ...customISOs,
-                                    newCustomISO.trim(),
-                                  ]);
-                                  setSelectedISOs([
-                                    ...selectedISOs,
-                                    newCustomISO.trim(),
-                                  ]);
-                                  setNewCustomISO("");
-                                }
-                              }}
-                            >
-                              <Plus className="w-4 h-4 mr-2" />
-                              {t("settings.add")}
-                            </Button>
-                          </div>
-                          {customISOs.length > 0 && (
-                            <div className="space-y-2">
-                              {customISOs.map((iso, index) => (
-                                <div
-                                  key={index}
-                                  className="flex items-center justify-between p-2 border rounded"
-                                >
-                                  <div className="flex items-center gap-2">
-                                    <input
-                                      type="checkbox"
-                                      checked={selectedISOs.includes(iso)}
-                                      onChange={async (e) => {
-                                        if (e.target.checked) {
-                                          await saveISOStandard(iso, iso, true);
-                                          setSelectedISOs([
-                                            ...selectedISOs,
-                                            iso,
-                                          ]);
-                                        } else {
-                                          await deleteISOStandard(iso);
-                                          setSelectedISOs(
-                                            selectedISOs.filter(
-                                              (id) => id !== iso
-                                            )
-                                          );
-                                        }
-                                      }}
-                                      className="w-4 h-4 cursor-pointer"
-                                    />
-                                    <span className="font-medium">{iso}</span>
-                                    <Badge>{t("settings.custom")}</Badge>
-                                  </div>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={async () => {
-                                      await deleteISOStandard(iso);
-                                      setCustomISOs(
-                                        customISOs.filter((_, i) => i !== index)
-                                      );
-                                      setSelectedISOs(
-                                        selectedISOs.filter((id) => id !== iso)
-                                      );
-                                    }}
-                                  >
-                                    <Trash2 className="w-4 h-4 text-destructive" />
-                                  </Button>
-                                </div>
-                              ))}
-                            </div>
-                          )}
+                        {/* Add Custom ISO */}
+                        <div className="flex gap-2 max-w-xl">
+                          <Input
+                            placeholder="Add custom ISO"
+                            value={newCustomISO}
+                            onChange={(e) => setNewCustomISO(e.target.value)}
+                            onKeyDown={async (e) => {
+                              if (e.key === "Enter" && newCustomISO.trim()) {
+                                await saveISOStandard(
+                                  newCustomISO.trim(),
+                                  newCustomISO.trim(),
+                                  true
+                                );
+                                setCustomISOs([
+                                  ...customISOs,
+                                  newCustomISO.trim(),
+                                ]);
+                                setSelectedISOs([
+                                  ...selectedISOs,
+                                  newCustomISO.trim(),
+                                ]);
+                                setNewCustomISO("");
+                              }
+                            }}
+                            className="flex-1"
+                          />
+                          <Button
+                            onClick={async () => {
+                              if (newCustomISO.trim()) {
+                                await saveISOStandard(
+                                  newCustomISO.trim(),
+                                  newCustomISO.trim(),
+                                  true
+                                );
+                                setCustomISOs([
+                                  ...customISOs,
+                                  newCustomISO.trim(),
+                                ]);
+                                setSelectedISOs([
+                                  ...selectedISOs,
+                                  newCustomISO.trim(),
+                                ]);
+                                setNewCustomISO("");
+                              }
+                            }}
+                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                          >
+                            Add
+                          </Button>
                         </div>
+                      </div>
+                    </CardContent>
+                  </Card>
 
-                        {/* Criteria Display */}
-                        {selectedISOs.length > 0 && (
-                          <div className="space-y-4 border-t pt-4">
+                  {/* ISO Criteria Management */}
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div className="space-y-6">
+                        {/* Criteria For Tabs and View Toggle */}
+                        {selectedISOs.length === 0 ? (
+                          <div className="text-center py-8 text-muted-foreground">
+                            <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                            <p>No ISO selected</p>
+                            <p className="text-sm">
+                              Please select an ISO above
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-4">
+                            {/* Criteria For: Tabs and Select All/Save Buttons */}
                             <div className="flex items-center justify-between">
-                              <h4 className="font-medium">
-                                {t("settings.criteriaForISOs")}
-                              </h4>
+                              <div className="flex items-center gap-3">
+                                <span className="font-semibold">
+                                  Criteria for:
+                                </span>
+                                <div className="flex gap-2">
+                                  {selectedISOs.map((isoId) => {
+                                    const isoCodeMap: {
+                                      [key: string]: string;
+                                    } = {
+                                      ISO_45001: "ISO 45001",
+                                      ISO_14001: "ISO 14001",
+                                      ISO_9001: "ISO 9001",
+                                    };
+                                    const displayName =
+                                      isoCodeMap[isoId] || isoId;
+                                    const isActive = activeISOForCriteria === isoId;
+                                    return (
+                                      <Button
+                                        key={isoId}
+                                        variant="outline"
+                                        size="sm"
+                                        className={`${
+                                          isActive
+                                            ? "bg-blue-600 text-white hover:bg-blue-700 border-blue-600"
+                                            : "bg-white text-gray-700 hover:bg-gray-100 border-gray-300"
+                                        }`}
+                                        onClick={() => setActiveISOForCriteria(isoId)}
+                                      >
+                                        {displayName}
+                                      </Button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+
                               <div className="flex gap-2">
                                 <Button
-                                  variant={
-                                    criteriaView === "compact"
-                                      ? "default"
-                                      : "outline"
-                                  }
+                                  variant="outline"
                                   size="sm"
-                                  onClick={() => setCriteriaView("compact")}
+                                  onClick={() => {
+                                    // Only select all for the active ISO
+                                    if (!activeISOForCriteria) return;
+
+                                    const allSectionKeys: string[] = [];
+                                    const allCriteriaIds: string[] = [];
+
+                                    const isoCodeMap: {
+                                      [key: string]: string;
+                                    } = {
+                                      ISO_45001: "ISO_45001",
+                                      ISO_14001: "ISO_14001",
+                                      ISO_9001: "ISO_9001",
+                                    };
+                                    const isoCode = isoCodeMap[activeISOForCriteria];
+                                    if (!isoCode) return;
+
+                                    const sections = isoCriteriaData[isoCode];
+                                    if (!sections) return;
+
+                                    const groupedSections: {
+                                      [key: string]: any[];
+                                    } = {};
+                                    sections?.forEach((section: any) => {
+                                      section.subsections?.forEach(
+                                        (subsection: any) => {
+                                          const mainNumber =
+                                            subsection.subsection_number?.split(
+                                              "."
+                                            )[0] || section.section_number;
+                                          if (!groupedSections[mainNumber]) {
+                                            groupedSections[mainNumber] = [];
+                                          }
+                                          groupedSections[mainNumber].push(
+                                            subsection
+                                          );
+                                          // Add subsection ID to selected criteria
+                                          allCriteriaIds.push(
+                                            `${isoCode}-${subsection.id}`
+                                          );
+                                        }
+                                      );
+                                      // Add main section ID
+                                      allCriteriaIds.push(
+                                        `${isoCode}-section-${section.section_number}`
+                                      );
+                                    });
+
+                                    Object.keys(groupedSections).forEach(
+                                      (sectionNum) => {
+                                        allSectionKeys.push(
+                                          `${isoCode}-${sectionNum}`
+                                        );
+                                      }
+                                    );
+
+                                    // Expand all sections and add to selected criteria
+                                    setExpandedSections((prev) => {
+                                      const filtered = prev.filter(k => !k.startsWith(`${isoCode}-`));
+                                      return [...filtered, ...allSectionKeys];
+                                    });
+                                    setSelectedCriteria((prev) => {
+                                      const filtered = prev.filter(id => !id.startsWith(`${isoCode}-`));
+                                      return [...filtered, ...allCriteriaIds];
+                                    });
+
+                                    // Save to localStorage
+                                    if (companyId) {
+                                      const newCriteria = selectedCriteria.filter(id => !id.startsWith(`${isoCode}-`)).concat(allCriteriaIds);
+                                      localStorage.setItem(
+                                        `selectedCriteria_${companyId}`,
+                                        JSON.stringify(newCriteria)
+                                      );
+                                      console.log(
+                                        "Saved",
+                                        allCriteriaIds.length,
+                                        "criteria to localStorage"
+                                      );
+                                    }
+
+                                    toast({
+                                      title: "All Selected",
+                                      description: `All criteria for ${isoCodeMap[activeISOForCriteria] || activeISOForCriteria} selected (${allCriteriaIds.length} items)`,
+                                    });
+                                  }}
                                 >
-                                  {t("settings.compact")}
+                                  Select All
                                 </Button>
                                 <Button
-                                  variant={
-                                    criteriaView === "complete"
-                                      ? "default"
-                                      : "outline"
-                                  }
+                                  variant="default"
                                   size="sm"
-                                  onClick={() => setCriteriaView("complete")}
+                                  className="bg-green-600 hover:bg-green-700 text-white"
+                                  onClick={() => {
+                                    // Save to localStorage
+                                    if (companyId) {
+                                      localStorage.setItem(
+                                        `selectedCriteria_${companyId}`,
+                                        JSON.stringify(selectedCriteria)
+                                      );
+                                      console.log(
+                                        "Saved",
+                                        selectedCriteria.length,
+                                        "criteria to localStorage"
+                                      );
+                                    }
+
+                                    toast({
+                                      title: "Saved",
+                                      description: `Criteria selection saved (${selectedCriteria.length} items)`,
+                                    });
+                                  }}
                                 >
-                                  {t("settings.complete")}
+                                  <Save className="w-4 h-4 mr-2" />
+                                  Save
                                 </Button>
                               </div>
                             </div>
 
-                            <p className="text-sm text-muted-foreground mb-3">
-                              {t("settings.criteriaNote")}
-                            </p>
+                            {/* Criteria List */}
+                            <div className="space-y-1">
+                              {activeISOForCriteria ? (() => {
+                                const isoCodeMap: { [key: string]: string } = {
+                                  ISO_45001: "ISO_45001",
+                                  ISO_14001: "ISO_14001",
+                                  ISO_9001: "ISO_9001",
+                                };
 
-                            <div className="space-y-3">
-                              {selectedISOs.map((isoId) => {
-                                const iso = predefinedISOs.find(
-                                  (i) => i.id === isoId
-                                ) || { name: isoId, id: isoId };
+                                const isoCode = isoCodeMap[activeISOForCriteria];
+                                if (!isoCode) return null;
 
-                                // Get predefined criteria based on view mode
-                                const baseCriteria = predefinedCriteria[isoId]
-                                  ? predefinedCriteria[isoId][criteriaView]
-                                  : [];
-
-                                // Get custom criteria for this ISO
-                                const isoCriteria = [
-                                  ...baseCriteria,
-                                  ...(customCriteria[isoId] || []),
-                                ];
-
-                                return (
-                                  <div
-                                    key={isoId}
-                                    className="border rounded-lg p-4 bg-card"
-                                  >
-                                    <div className="flex items-center justify-between mb-3">
-                                      <h5 className="font-medium text-base">
-                                        {iso.name}
-                                      </h5>
-                                      <Badge
-                                        variant="secondary"
-                                        className="text-xs"
-                                      >
-                                        {isoCriteria.length}{" "}
-                                        {t("settings.criteria")}
-                                      </Badge>
+                                const sections = isoCriteriaData[isoCode];
+                                if (!sections || sections.length === 0)
+                                  return (
+                                    <div className="text-center py-8 text-muted-foreground">
+                                      <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                                      <p>No criteria available for this ISO</p>
                                     </div>
-                                    <div className="space-y-2 mb-3">
-                                      {isoCriteria.map((criterion, idx) => (
+                                  );
+
+                                // Group subsections by their main section number
+                                const groupedSections: {
+                                  [key: string]: any[];
+                                } = {};
+
+                                sections?.forEach((section: any) => {
+                                  section.subsections?.forEach(
+                                    (subsection: any) => {
+                                      const mainNumber =
+                                        subsection.subsection_number?.split(
+                                          "."
+                                        )[0] || section.section_number;
+                                      if (!groupedSections[mainNumber]) {
+                                        groupedSections[mainNumber] = [];
+                                      }
+                                      groupedSections[mainNumber].push(
+                                        subsection
+                                      );
+                                    }
+                                  );
+                                });
+
+                                return Object.keys(groupedSections)
+                                  .sort((a, b) => parseFloat(a) - parseFloat(b))
+                                  .map((sectionNum) => {
+                                    const subsections =
+                                      groupedSections[sectionNum];
+                                    const isExpanded =
+                                      expandedSections.includes(
+                                        `${isoCode}-${sectionNum}`
+                                      );
+
+                                    return (
+                                      <div key={`${isoCode}-${sectionNum}`}>
+                                        {/* Main Section */}
                                         <div
-                                          key={idx}
-                                          className="flex items-start gap-3 text-sm group hover:bg-muted/50 p-2 rounded"
+                                          className="flex items-start gap-3 px-3 py-2 hover:bg-gray-50 border-b cursor-pointer"
+                                          onClick={() => {
+                                            setExpandedSections((prev) =>
+                                              isExpanded
+                                                ? prev.filter(
+                                                    (k) =>
+                                                      k !==
+                                                      `${isoCode}-${sectionNum}`
+                                                  )
+                                                : [
+                                                    ...prev,
+                                                    `${isoCode}-${sectionNum}`,
+                                                  ]
+                                            );
+                                          }}
                                         >
                                           <input
                                             type="checkbox"
-                                            className="mt-0.5 w-4 h-4 cursor-pointer"
-                                            id={`criterion-${isoId}-${idx}`}
+                                            className="w-4 h-4 mt-1 cursor-pointer"
+                                            checked={selectedCriteria.includes(
+                                              `${isoCode}-section-${sectionNum}`
+                                            )}
+                                            onChange={(e) => {
+                                              e.stopPropagation();
+                                              const criteriaId = `${isoCode}-section-${sectionNum}`;
+                                              const newCriteria = e.target
+                                                .checked
+                                                ? [
+                                                    ...selectedCriteria,
+                                                    criteriaId,
+                                                  ]
+                                                : selectedCriteria.filter(
+                                                    (id) => id !== criteriaId
+                                                  );
+                                              setSelectedCriteria(newCriteria);
+
+                                              // Auto-save to localStorage
+                                              if (companyId) {
+                                                localStorage.setItem(
+                                                  `selectedCriteria_${companyId}`,
+                                                  JSON.stringify(newCriteria)
+                                                );
+                                              }
+                                            }}
+                                            onClick={(e) => e.stopPropagation()}
                                           />
-                                          <label
-                                            htmlFor={`criterion-${isoId}-${idx}`}
-                                            className="flex-1 cursor-pointer"
-                                          >
-                                            {criterion}
-                                          </label>
-                                          {/* Show delete button for custom criteria */}
-                                          {idx >= baseCriteria.length && (
+                                          <div className="flex-1">
+                                            <div className="font-medium text-sm">
+                                              {sectionNum}{" "}
+                                              {sections.find(
+                                                (s: any) =>
+                                                  s.section_number ===
+                                                  sectionNum
+                                              )?.title || subsections[0]?.title}
+                                            </div>
+                                          </div>
+                                          {/* Delete button for custom sections (not standard 1-7) */}
+                                          {!/^[1-7]$/.test(sectionNum) && (
                                             <Button
                                               variant="ghost"
-                                              size="icon"
-                                              className="h-6 w-6 opacity-0 group-hover:opacity-100"
-                                              onClick={() => {
-                                                const newCustom = {
-                                                  ...customCriteria,
-                                                  [isoId]: (
-                                                    customCriteria[isoId] || []
-                                                  ).filter(
-                                                    (_, i) =>
-                                                      i !==
-                                                      idx - baseCriteria.length
-                                                  ),
-                                                };
-                                                setCustomCriteria(newCustom);
-                                                toast({
-                                                  title: "Criterion removed",
-                                                  description:
-                                                    "Custom criterion has been deleted.",
-                                                });
+                                              size="sm"
+                                              className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                // Delete all subsections in this group by their IDs
+                                                const subsectionIds = subsections.map((s: any) => s.id);
+                                                handleDeleteCriteriaBatch(subsectionIds);
                                               }}
                                             >
-                                              <Trash2 className="w-3 h-3 text-destructive" />
+                                              <Trash2 className="w-4 h-4" />
                                             </Button>
                                           )}
                                         </div>
-                                      ))}
-                                    </div>
 
-                                    {/* Add Custom Criterion */}
-                                    {addingCriterionForISO === isoId ? (
-                                      <div className="space-y-2 border-t pt-3">
-                                        <Input
-                                          placeholder={t(
-                                            "settings.enterNewCriterion"
-                                          )}
-                                          value={newCriterionText}
-                                          onChange={(e) =>
-                                            setNewCriterionText(e.target.value)
-                                          }
-                                          onKeyDown={(e) => {
-                                            if (
-                                              e.key === "Enter" &&
-                                              newCriterionText.trim()
-                                            ) {
-                                              const newCustom = {
-                                                ...customCriteria,
-                                                [isoId]: [
-                                                  ...(customCriteria[isoId] ||
-                                                    []),
-                                                  newCriterionText.trim(),
-                                                ],
-                                              };
-                                              setCustomCriteria(newCustom);
-                                              setNewCriterionText("");
-                                              setAddingCriterionForISO(null);
-                                              toast({
-                                                title: "Criterion added",
-                                                description:
-                                                  "Custom criterion has been added successfully.",
-                                              });
-                                            } else if (e.key === "Escape") {
-                                              setNewCriterionText("");
-                                              setAddingCriterionForISO(null);
-                                            }
-                                          }}
-                                          autoFocus
-                                        />
-                                        <div className="flex gap-2">
-                                          <Button
-                                            size="sm"
-                                            onClick={() => {
-                                              if (newCriterionText.trim()) {
-                                                const newCustom = {
-                                                  ...customCriteria,
-                                                  [isoId]: [
-                                                    ...(customCriteria[isoId] ||
-                                                      []),
-                                                    newCriterionText.trim(),
-                                                  ],
-                                                };
-                                                setCustomCriteria(newCustom);
-                                                setNewCriterionText("");
-                                                setAddingCriterionForISO(null);
-                                                toast({
-                                                  title: "Criterion added",
-                                                  description:
-                                                    "Custom criterion has been added successfully.",
-                                                });
-                                              }
-                                            }}
-                                          >
-                                            <Save className="w-3 h-3 mr-1" />
-                                            {t("common.save")}
-                                          </Button>
-                                          <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => {
-                                              setNewCriterionText("");
-                                              setAddingCriterionForISO(null);
-                                            }}
-                                          >
-                                            <X className="w-3 h-3 mr-1" />
-                                            {t("common.cancel")}
-                                          </Button>
-                                        </div>
+                                        {/* Subsections */}
+                                        {isExpanded &&
+                                          subsections.map((subsection: any) => {
+                                            const questionsExpanded = expandedQuestions.has(subsection.id);
+                                            return (
+                                            <div key={subsection.id}>
+                                              <div 
+                                                className="flex items-start gap-3 px-3 py-2 pl-10 hover:bg-gray-50 border-b bg-gray-50/50 cursor-pointer"
+                                                onClick={() => {
+                                                  const newExpanded = new Set(expandedQuestions);
+                                                  if (questionsExpanded) {
+                                                    newExpanded.delete(subsection.id);
+                                                  } else {
+                                                    newExpanded.add(subsection.id);
+                                                  }
+                                                  setExpandedQuestions(newExpanded);
+                                                }}
+                                              >
+                                              <input
+                                                type="checkbox"
+                                                className="w-4 h-4 mt-1 cursor-pointer"
+                                                checked={selectedCriteria.includes(
+                                                  `${isoCode}-${subsection.id}`
+                                                )}
+                                                onChange={(e) => {
+                                                  const criteriaId = `${isoCode}-${subsection.id}`;
+                                                  const newCriteria = e.target
+                                                    .checked
+                                                    ? [
+                                                        ...selectedCriteria,
+                                                        criteriaId,
+                                                      ]
+                                                    : selectedCriteria.filter(
+                                                        (id) =>
+                                                          id !== criteriaId
+                                                      );
+                                                  setSelectedCriteria(
+                                                    newCriteria
+                                                  );
+
+                                                  // Auto-save to localStorage
+                                                  if (companyId) {
+                                                    localStorage.setItem(
+                                                      `selectedCriteria_${companyId}`,
+                                                      JSON.stringify(
+                                                        newCriteria
+                                                      )
+                                                    );
+                                                  }
+                                                }}
+                                              />
+                                              {subsection.questions && subsection.questions.length > 0 && (
+                                                <div className="text-gray-400">
+                                                  {questionsExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                                                </div>
+                                              )}
+                                              <div className="flex-1">
+                                                <div className="font-medium text-sm">
+                                                  {subsection.subsection_number}{" "}
+                                                  {language === "en"
+                                                    ? subsection.title_en ||
+                                                      subsection.title
+                                                    : subsection.title}
+                                                </div>
+                                              </div>
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleDeleteCriterion(subsection.id);
+                                                }}
+                                              >
+                                                <Trash2 className="w-4 h-4" />
+                                              </Button>
+                                            </div>
+
+                                            {/* Questions under this subsection */}
+                                            {questionsExpanded && subsection.questions && subsection.questions.length > 0 && (
+                                              <div className="ml-16 border-l-2 border-gray-200 pl-4">
+                                                {subsection.questions.map((question: any) => (
+                                                  <div
+                                                    key={question.id}
+                                                    className="py-2 text-sm text-gray-600"
+                                                  >
+                                                    <span className="font-medium text-gray-400 mr-2">
+                                                      •
+                                                    </span>
+                                                    {language === "en"
+                                                      ? question.question_text_en || question.question_text
+                                                      : question.question_text}
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            )}
+                                            </div>
+                                          );
+                                          })}
                                       </div>
-                                    ) : (
-                                      <Button
-                                        variant="link"
-                                        size="sm"
-                                        className="px-0 text-primary"
-                                        onClick={() =>
-                                          setAddingCriterionForISO(isoId)
-                                        }
-                                      >
-                                        <Plus className="w-3 h-3 mr-1" />
-                                        {t("settings.add")}
-                                      </Button>
-                                    )}
-                                  </div>
-                                );
-                              })}
+                                    );
+                                  });
+                              })() : (
+                                <div className="text-center py-8 text-muted-foreground">
+                                  <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                                  <p>Please select an ISO above to view its criteria</p>
+                                </div>
+                              )}
                             </div>
 
-                            <div className="flex items-start gap-2 p-3 bg-muted/50 rounded-lg">
-                              <AlertTriangle className="w-4 h-4 text-muted-foreground mt-0.5" />
-                              <p className="text-xs text-muted-foreground">
-                                <strong>{t("common.note")}:</strong>{" "}
-                                {t("settings.criteriaInfoNote")}
-                              </p>
+                            {/* Add Criterion Inputs */}
+                            <div className="flex gap-2 pt-4">
+                              <Input
+                                placeholder="Section.Subsection (e.g. 1.8, 3.5)"
+                                className="w-64"
+                                value={newCriterionId}
+                                onChange={(e) => setNewCriterionId(e.target.value)}
+                              />
+                              <Input 
+                                placeholder="Enter criterion title" 
+                                className="flex-1" 
+                                value={newCriterionText}
+                                onChange={(e) => setNewCriterionText(e.target.value)}
+                              />
+                              <Button 
+                                className="bg-blue-600 hover:bg-blue-700 text-white"
+                                onClick={handleAddCustomCriterion}
+                              >
+                                <Plus className="w-4 h-4 mr-2" />
+                                Add
+                              </Button>
+                            </div>
+
+                            {/* Note */}
+                            <div className="pt-4 text-sm text-muted-foreground">
+                              <span className="font-semibold">Note:</span>{" "}
+                              Sub-points of the selected criteria are
+                              automatically generated as individual checklist
+                              items in the audit and can be checked off
+                              individually.
                             </div>
                           </div>
                         )}
@@ -3398,6 +4531,23 @@ export default function Settings() {
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
+                      <div className="flex items-center justify-between pb-2 border-b">
+                        <p className="text-sm text-muted-foreground">
+                          {selectedGInvestigations.length} {t("gcode.of")} 46{" "}
+                          {t("gcode.selectedCount")}
+                        </p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={toggleSelectAll}
+                        >
+                          <CheckSquare className="w-4 h-4 mr-2" />
+                          {isAllSelected()
+                            ? t("gcode.deselectAll")
+                            : t("gcode.selectAll")}
+                        </Button>
+                      </div>
+
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {[
                           { code: "G 1.1", key: "G1.1" },
@@ -3457,7 +4607,11 @@ export default function Settings() {
                             <input
                               type="checkbox"
                               id={item.code.replace(/\s/g, "-")}
-                              className="w-4 h-4 cursor-pointer mt-1 flex-shrink-0"
+                              className={`w-4 h-4 cursor-pointer mt-1 flex-shrink-0 rounded border-2 transition-all ${
+                                selectedGInvestigations.includes(item.code)
+                                  ? "border-red-500 bg-red-500 text-white accent-red-500"
+                                  : "border-gray-300 hover:border-red-300"
+                              }`}
                               checked={selectedGInvestigations.includes(
                                 item.code
                               )}
@@ -3465,9 +4619,21 @@ export default function Settings() {
                             />
                             <label
                               htmlFor={item.code.replace(/\s/g, "-")}
-                              className="text-sm cursor-pointer flex-1"
+                              className={`text-sm cursor-pointer flex-1 transition-colors ${
+                                selectedGInvestigations.includes(item.code)
+                                  ? "text-foreground font-medium"
+                                  : "text-muted-foreground"
+                              }`}
                             >
-                              <span className="font-medium">{item.code}</span>{" "}
+                              <span
+                                className={`font-medium ${
+                                  selectedGInvestigations.includes(item.code)
+                                    ? "text-red-600"
+                                    : ""
+                                }`}
+                              >
+                                {item.code}
+                              </span>{" "}
                               {t(`gcode.${item.key}`)}
                             </label>
                           </div>
@@ -3589,3 +4755,4 @@ export default function Settings() {
     </div>
   );
 }
+

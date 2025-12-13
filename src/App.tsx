@@ -14,8 +14,11 @@ import ActivityGroups from "./pages/ActivityGroups";
 import RiskAssessments from "./pages/RiskAssessments";
 import Measures from "./pages/Measures";
 import Audits from "./pages/Audits";
+import AuditDetails from "./pages/AuditDetails";
 import Tasks from "./pages/Tasks";
 import Training from "./pages/Training";
+import LessonEditor from "./pages/LessonEditor";
+import LessonViewer from "./pages/LessonViewer";
 import Incidents from "./pages/Incidents";
 import Investigations from "./pages/Investigations";
 import Settings from "./pages/Settings";
@@ -30,6 +33,7 @@ import SuperAdminDashboard from "./pages/SuperAdmin/Dashboard";
 import SuperAdminCompanies from "./pages/SuperAdmin/Companies";
 import AuthDebug from "./pages/AuthDebug";
 import NotFound from "./pages/NotFound";
+import PublicNotes from "./pages/PublicNotes";
 import MainLayout from "./components/MainLayout";
 
 const queryClient = new QueryClient();
@@ -132,6 +136,14 @@ const App = () => (
                 }
               />
               <Route
+                path="/audits/:id"
+                element={
+                  <MainLayout>
+                    <AuditDetails />
+                  </MainLayout>
+                }
+              />
+              <Route
                 path="/tasks"
                 element={
                   <MainLayout>
@@ -144,6 +156,22 @@ const App = () => (
                 element={
                   <MainLayout>
                     <Training />
+                  </MainLayout>
+                }
+              />
+              <Route
+                path="/training/:courseId/lesson/:lessonId"
+                element={
+                  <MainLayout>
+                    <LessonEditor />
+                  </MainLayout>
+                }
+              />
+              <Route
+                path="/training/:courseId/lesson/:lessonId/view"
+                element={
+                  <MainLayout>
+                    <LessonViewer />
                   </MainLayout>
                 }
               />
@@ -211,6 +239,9 @@ const App = () => (
                   </MainLayout>
                 }
               />
+
+              {/* Public Routes (no authentication required) */}
+              <Route path="/notes/:token" element={<PublicNotes />} />
 
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />

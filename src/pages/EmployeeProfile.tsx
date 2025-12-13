@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -43,6 +43,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
+import { sendNoteNotification } from "@/services/emailService";
 import {
   ArrowLeft,
   Edit2,
@@ -82,6 +83,7 @@ import {
   Calendar as CalendarIcon,
   Hash,
   CheckCircle,
+  Bell,
 } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -119,6 +121,7 @@ interface HealthCheckup {
   investigation_name?: string;
   appointment_date: string;
   completion_date?: string | null;
+  due_date?: string | null;
   status: string;
   certificate_url?: string | null;
   notes: string | null;
@@ -187,6 +190,8 @@ export default function EmployeeProfile() {
   const [newTag, setNewTag] = useState("");
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [employees, setEmployees] = useState<any[]>([]);
+  const [teamMembers, setTeamMembers] = useState<any[]>([]);
+  const [selectedNoteVisibility, setSelectedNoteVisibility] = useState<string>("");
 
   // Task enhancement states
   const [newTaskDueDate, setNewTaskDueDate] = useState<Date | undefined>(
@@ -225,6 +230,9 @@ export default function EmployeeProfile() {
   const [profileFields, setProfileFields] = useState<any[]>([]);
   const [showProfileFieldMenu, setShowProfileFieldMenu] = useState(false);
   const [showAllProfileFields, setShowAllProfileFields] = useState(false);
+  
+  // Debounce timer ref for profile field updates
+  const debounceTimerRef = useRef<{[key: string]: NodeJS.Timeout}>({});
 
   // Special profile fields (languages, skills, salary)
   const [languages, setLanguages] = useState("");
@@ -233,6 +241,19 @@ export default function EmployeeProfile() {
   const [editingSpecialField, setEditingSpecialField] = useState<string | null>(
     null
   );
+  
+  // Editable labels for special fields
+  const [languagesLabel, setLanguagesLabel] = useState("Languages Known");
+  const [skillsLabel, setSkillsLabel] = useState("Skills");
+  const [salaryLabel, setSalaryLabel] = useState("Salary");
+  const [editingSpecialFieldLabel, setEditingSpecialFieldLabel] = useState<string | null>(null);
+  
+  // State for editing custom profile fields
+  const [editingCustomField, setEditingCustomField] = useState<string | null>(null);
+  const [customFieldEditValue, setCustomFieldEditValue] = useState<any>("");
+  const [editingCustomFieldLabel, setEditingCustomFieldLabel] = useState<string | null>(null);
+  const [customFieldLabelEditValue, setCustomFieldLabelEditValue] = useState<string>("");
+
 
   // Check-ups states
   const [isCheckupDialogOpen, setIsCheckupDialogOpen] = useState(false);
@@ -240,12 +261,22 @@ export default function EmployeeProfile() {
   const [checkupFormData, setCheckupFormData] = useState({
     investigation_id: "",
     appointment_date: "",
+    due_date: "",
     status: "open" as "done" | "open" | "planned",
     completion_date: "",
     certificate_url: "",
     notes: "",
   });
   const [editingCheckup, setEditingCheckup] = useState<any>(null);
+
+  // Appointment dialog states
+  const [isAppointmentDialogOpen, setIsAppointmentDialogOpen] = useState(false);
+  const [selectedCheckupForAppointment, setSelectedCheckupForAppointment] = useState<any>(null);
+  const [appointmentDate, setAppointmentDate] = useState<Date | undefined>(undefined);
+
+  // Document upload states
+  const [uploadingDocument, setUploadingDocument] = useState<string | null>(null);
+  const [checkupDocuments, setCheckupDocuments] = useState<Record<string, any[]>>({});
 
   // Drag and drop state
   const [isDragging, setIsDragging] = useState(false);
@@ -263,6 +294,7 @@ export default function EmployeeProfile() {
       fetchEmployees();
       fetchGInvestigations();
       fetchProfileFields();
+      fetchTeamMembers();
     }
   }, [id, companyId]);
 
@@ -350,9 +382,42 @@ export default function EmployeeProfile() {
         return;
       }
       setHealthCheckups((data as any) || []);
+      
+      // Fetch documents for all checkups
+      if (data && data.length > 0) {
+        fetchAllCheckupDocuments(data.map(c => c.id));
+      }
     } catch (error) {
       console.error("Error fetching health checkups:", error);
       setHealthCheckups([]);
+    }
+  };
+
+  // Fetch documents for checkups
+  const fetchAllCheckupDocuments = async (checkupIds: string[]) => {
+    try {
+      const { data, error } = await supabase
+        .from("checkup_documents")
+        .select("*")
+        .in("checkup_id", checkupIds)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.log("Checkup documents table not created yet");
+        return;
+      }
+
+      // Group documents by checkup_id
+      const grouped: Record<string, any[]> = {};
+      data?.forEach((doc) => {
+        if (!grouped[doc.checkup_id]) {
+          grouped[doc.checkup_id] = [];
+        }
+        grouped[doc.checkup_id].push(doc);
+      });
+      setCheckupDocuments(grouped);
+    } catch (error) {
+      console.error("Error fetching checkup documents:", error);
     }
   };
 
@@ -525,16 +590,23 @@ export default function EmployeeProfile() {
   const fetchEmployees = async () => {
     if (!companyId) return;
     try {
+      // Fetch from team_members table for @ mention functionality
       const { data, error } = await supabase
-        .from("employees")
-        .select("id, full_name, employee_number")
-        .eq("company_id", companyId)
-        .eq("is_active", true);
+        .from("team_members")
+        .select("id, first_name, last_name, email, role")
+        .eq("company_id", companyId);
 
       if (error) throw error;
-      setEmployees(data || []);
+      
+      // Map to employees format for @ mention display
+      setEmployees((data || []).map((tm: any) => ({
+        id: tm.id,
+        full_name: `${tm.first_name} ${tm.last_name}`,
+        employee_number: tm.email,
+        role: tm.role,
+      })));
     } catch (error) {
-      console.error("Error fetching employees:", error);
+      console.error("Error fetching team members:", error);
     }
   };
 
@@ -557,6 +629,29 @@ export default function EmployeeProfile() {
     } catch (error) {
       console.error("Error fetching G-Investigations:", error);
       setGInvestigations([]);
+    }
+  };
+
+  const fetchTeamMembers = async () => {
+    if (!companyId) return;
+
+    try {
+      const { data, error } = await supabase
+        .from("team_members")
+        .select("*")
+        .eq("company_id", companyId)
+        .order("first_name", { ascending: true });
+
+      if (error) {
+        console.error("Error fetching team members:", error);
+        setTeamMembers([]);
+        return;
+      }
+
+      setTeamMembers(data || []);
+    } catch (error) {
+      console.error("Error fetching team members:", error);
+      setTeamMembers([]);
     }
   };
 
@@ -650,6 +745,46 @@ export default function EmployeeProfile() {
       console.error("Error updating profile field:", error);
       toast.error("Failed to update field");
     }
+  };
+
+  // Debounced version for text input fields to avoid updating on every keystroke
+  const handleDebouncedProfileFieldUpdate = (fieldId: string, updates: any) => {
+    // Update local state immediately for responsive UI
+    const updatedFields = profileFields.map((f) =>
+      f.id === fieldId ? { ...f, ...updates } : f
+    );
+    setProfileFields(updatedFields);
+
+    // Clear existing timer for this field
+    if (debounceTimerRef.current[fieldId]) {
+      clearTimeout(debounceTimerRef.current[fieldId]);
+    }
+
+    // Set new timer to update database after 1 second of no typing
+    debounceTimerRef.current[fieldId] = setTimeout(async () => {
+      try {
+        const { error } = await supabase
+          .from("employees")
+          .update({ profile_fields: updatedFields })
+          .eq("id", id);
+
+        if (error) throw error;
+
+        const field = profileFields.find((f) => f.id === fieldId);
+        toast.success("Field updated");
+
+        await logActivity(
+          `Updated profile field: ${field?.label || fieldId}`,
+          "update",
+          `Changed ${field?.label} value`,
+          { fieldId, updates }
+        );
+        await fetchActivityLogs();
+      } catch (error) {
+        console.error("Error updating profile field:", error);
+        toast.error("Failed to update field");
+      }
+    }, 1000); // 1 second delay
   };
 
   const handleDeleteProfileField = async (fieldId: string) => {
@@ -803,11 +938,21 @@ export default function EmployeeProfile() {
         // If parsing fails, treat as empty
       }
 
+      // Get the selected team member's name
+      let authorName = "Anonymous";
+      if (selectedNoteVisibility) {
+        const selectedMember = teamMembers.find(m => m.id === selectedNoteVisibility);
+        if (selectedMember) {
+          authorName = `${selectedMember.first_name} ${selectedMember.last_name}`;
+        }
+      }
+
       const newNoteObj = {
         id: Date.now().toString(),
         content: notes,
-        author: "Current User", // TODO: Get actual user name
+        author: authorName, // Use selected team member's name
         date: new Date().toISOString(),
+        visibleTo: selectedNoteVisibility, // Add visibility tracking
         replies: [],
       };
 
@@ -1290,10 +1435,27 @@ export default function EmployeeProfile() {
     }
 
     try {
+      // Look up the full G-Investigation name
+      // The dropdown might store either ID or name, so check both
+      let gInvestigation = gInvestigations.find(
+        (g) => g.id === checkupFormData.investigation_id
+      );
+      
+      // If not found by ID, try finding by name
+      if (!gInvestigation) {
+        gInvestigation = gInvestigations.find(
+          (g) => g.name === checkupFormData.investigation_id
+        );
+      }
+      
+      const investigationName = gInvestigation?.name || checkupFormData.investigation_id;
+
+      // Note: investigation_id is a foreign key to the investigations table
+      // When creating checkups directly (not from an investigation), we don't set it
       const checkupData: any = {
         employee_id: id,
         company_id: companyId,
-        investigation_name: checkupFormData.investigation_id, // Store G-code directly
+        investigation_name: investigationName, // Store full G-investigation name
         appointment_date: checkupFormData.appointment_date,
         status: checkupFormData.status,
         notes: checkupFormData.notes,
@@ -1305,6 +1467,11 @@ export default function EmployeeProfile() {
 
       if (checkupFormData.certificate_url) {
         checkupData.certificate_url = checkupFormData.certificate_url;
+      }
+
+      // Only include due_date if it has a value (for backward compatibility)
+      if (checkupFormData.due_date) {
+        checkupData.due_date = checkupFormData.due_date;
       }
 
       const { data, error } = await supabase
@@ -1327,7 +1494,7 @@ export default function EmployeeProfile() {
         await supabase.from("health_checkups").insert({
           employee_id: id,
           company_id: companyId,
-          investigation_name: checkupFormData.investigation_id, // Store G-code directly
+          investigation_name: investigationName, // Store full G-investigation name
           appointment_date: nextCheckupDate.toISOString().split("T")[0],
           status: "open",
           notes: "Auto-scheduled 3 years after previous checkup",
@@ -1342,6 +1509,7 @@ export default function EmployeeProfile() {
       setCheckupFormData({
         investigation_id: "",
         appointment_date: "",
+        due_date: "",
         status: "open",
         completion_date: "",
         certificate_url: "",
@@ -1351,7 +1519,7 @@ export default function EmployeeProfile() {
       await logActivity(
         "Created health check-up",
         "create",
-        `Scheduled check-up: ${checkupFormData.investigation_id} on ${checkupFormData.appointment_date}`,
+        `Scheduled check-up: ${investigationName} on ${checkupFormData.appointment_date}`,
         {
           investigationId: checkupFormData.investigation_id,
           appointmentDate: checkupFormData.appointment_date,
@@ -1468,6 +1636,104 @@ export default function EmployeeProfile() {
     } catch (error: any) {
       console.error("Error uploading certificate:", error);
       toast.error(error.message || "Failed to upload certificate");
+    }
+  };
+
+  // Document upload handler for checkups
+  const handleCheckupDocumentUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+    checkupId: string
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file || !companyId || !user) return;
+
+    setUploadingDocument(checkupId);
+    try {
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${Date.now()}-${file.name}`;
+      const filePath = `${companyId}/checkup-documents/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("documents")
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      // Insert into checkup_documents table (file_url will be generated on demand)
+      const { error: insertError } = await supabase
+        .from("checkup_documents")
+        .insert({
+          checkup_id: checkupId,
+          company_id: companyId,
+          file_name: file.name,
+          file_path: filePath,
+          file_url: filePath, // Store path, will generate signed URL when needed
+          file_size: file.size,
+          mime_type: file.type,
+          uploaded_by: user.id,
+        });
+
+      if (insertError) throw insertError;
+
+      toast.success("Document uploaded successfully");
+      fetchHealthCheckups();
+    } catch (error) {
+      console.error("Error uploading document:", error);
+      toast.error("Failed to upload document");
+    } finally {
+      setUploadingDocument(null);
+    }
+  };
+
+  // Delete checkup document
+  const handleDeleteCheckupDocument = async (documentId: string, filePath: string) => {
+    if (!confirm("Delete this document?")) return;
+
+    try {
+      // Delete from storage
+      const { error: storageError } = await supabase.storage
+        .from("documents")
+        .remove([filePath]);
+
+      if (storageError) console.error("Storage delete error:", storageError);
+
+      // Delete from database
+      const { error: deleteError } = await supabase
+        .from("checkup_documents")
+        .delete()
+        .eq("id", documentId);
+
+      if (deleteError) throw deleteError;
+
+      toast.success("Document deleted successfully");
+      fetchHealthCheckups();
+    } catch (error) {
+      console.error("Error deleting document:", error);
+      toast.error("Failed to delete document");
+    }
+  };
+
+  // Generate signed URL for document preview
+  const getDocumentSignedUrl = async (filePath: string) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from("documents")
+        .createSignedUrl(filePath, 3600); // 1 hour expiry
+
+      if (error) throw error;
+      return data.signedUrl;
+    } catch (error) {
+      console.error("Error generating signed URL:", error);
+      toast.error("Failed to generate preview link");
+      return null;
+    }
+  };
+
+  // Handle document preview
+  const handlePreviewCheckupDocument = async (filePath: string) => {
+    const signedUrl = await getDocumentSignedUrl(filePath);
+    if (signedUrl) {
+      window.open(signedUrl, '_blank');
     }
   };
 
@@ -1648,6 +1914,25 @@ export default function EmployeeProfile() {
       }
       return part;
     });
+  };
+
+  // Get automatic checkup status based on dates
+  const getCheckupStatus = (checkup: HealthCheckup) => {
+    if (checkup.completion_date) {
+      return { label: 'Done', variant: 'default' as const };
+    }
+    if (checkup.appointment_date) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const apptDate = new Date(checkup.appointment_date);
+      apptDate.setHours(0, 0, 0, 0);
+      
+      if (apptDate <= today) {
+        return { label: 'Due', variant: 'destructive' as const };
+      }
+      return { label: 'Planned', variant: 'secondary' as const };
+    }
+    return { label: 'Open', variant: 'outline' as const };
   };
 
   return (
@@ -1836,155 +2121,13 @@ export default function EmployeeProfile() {
                   </CardContent>
                 </Card>
 
-                {/* 3.5. Profile Fields - Languages, Skills, Salary */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">Profile Fields</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      {/* Languages */}
-                      <div>
-                        <Label className="text-sm font-medium mb-2 block">
-                          Languages Known
-                        </Label>
-                        {editingSpecialField === "languages" ? (
-                          <div className="space-y-2">
-                            <Textarea
-                              value={languages}
-                              onChange={(e) => setLanguages(e.target.value)}
-                              placeholder="Enter languages (e.g., English, German, Spanish)"
-                              className="text-sm min-h-[80px]"
-                              autoFocus
-                            />
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                onClick={() =>
-                                  handleSpecialFieldSave("languages")
-                                }
-                              >
-                                <Save className="w-3 h-3 mr-1" />
-                                Save
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() =>
-                                  handleSpecialFieldCancel("languages")
-                                }
-                              >
-                                <X className="w-3 h-3 mr-1" />
-                                Cancel
-                              </Button>
-                            </div>
-                          </div>
-                        ) : (
-                          <p
-                            className="text-sm text-muted-foreground whitespace-pre-wrap cursor-pointer hover:bg-muted/50 p-2 rounded transition-colors"
-                            onClick={() => setEditingSpecialField("languages")}
-                          >
-                            {languages || "No languages specified"}
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Skills */}
-                      <div>
-                        <Label className="text-sm font-medium mb-2 block">
-                          Skills
-                        </Label>
-                        {editingSpecialField === "skills" ? (
-                          <div className="space-y-2">
-                            <Textarea
-                              value={skills}
-                              onChange={(e) => setSkills(e.target.value)}
-                              placeholder="Enter skills (e.g., Project Management, Safety Training)"
-                              className="text-sm min-h-[80px]"
-                              autoFocus
-                            />
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                onClick={() => handleSpecialFieldSave("skills")}
-                              >
-                                <Save className="w-3 h-3 mr-1" />
-                                Save
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() =>
-                                  handleSpecialFieldCancel("skills")
-                                }
-                              >
-                                <X className="w-3 h-3 mr-1" />
-                                Cancel
-                              </Button>
-                            </div>
-                          </div>
-                        ) : (
-                          <p
-                            className="text-sm text-muted-foreground whitespace-pre-wrap cursor-pointer hover:bg-muted/50 p-2 rounded transition-colors"
-                            onClick={() => setEditingSpecialField("skills")}
-                          >
-                            {skills || "No skills specified"}
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Salary */}
-                      <div>
-                        <Label className="text-sm font-medium mb-2 block">
-                          Salary
-                        </Label>
-                        {editingSpecialField === "salary" ? (
-                          <div className="space-y-2">
-                            <Input
-                              type="text"
-                              value={salary}
-                              onChange={(e) => setSalary(e.target.value)}
-                              placeholder="Enter salary (e.g., €50,000 per year)"
-                              className="text-sm"
-                              autoFocus
-                            />
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                onClick={() => handleSpecialFieldSave("salary")}
-                              >
-                                <Save className="w-3 h-3 mr-1" />
-                                Save
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() =>
-                                  handleSpecialFieldCancel("salary")
-                                }
-                              >
-                                <X className="w-3 h-3 mr-1" />
-                                Cancel
-                              </Button>
-                            </div>
-                          </div>
-                        ) : (
-                          <p
-                            className="text-sm text-muted-foreground cursor-pointer hover:bg-muted/50 p-2 rounded transition-colors"
-                            onClick={() => setEditingSpecialField("salary")}
-                          >
-                            {salary || "No salary specified"}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* 4. Profile Fields Table - FOURTH with Add profile field button */}
+                {/* 3.5. Unified Profile Fields Card */}
                 <Card>
                   <CardHeader>
                     <div className="flex items-center justify-between">
+                      <CardTitle className="text-lg">Profile Fields</CardTitle>
+                      
+                      {/* Add profile field button on the right */}
                       <div className="relative">
                         <Button
                           variant="ghost"
@@ -2000,7 +2143,7 @@ export default function EmployeeProfile() {
                         </Button>
 
                         {showProfileFieldMenu && (
-                          <Card className="absolute top-full left-0 mt-1 w-48 z-50 shadow-lg">
+                          <Card className="absolute top-full right-0 mt-1 w-48 z-50 shadow-lg">
                             <CardContent className="p-2">
                               <div className="space-y-1">
                                 <Button
@@ -2064,121 +2207,373 @@ export default function EmployeeProfile() {
                     </div>
                   </CardHeader>
                   <CardContent>
-                    {profileFields.length > 0 ? (
-                      <>
-                        <div className="border rounded-lg">
-                          <Table>
-                            <TableBody>
-                              {profileFields
-                                .slice(0, showAllProfileFields ? undefined : 3)
-                                .map((field) => (
-                                  <TableRow key={field.id}>
-                                    <TableCell className="font-medium w-[180px]">
-                                      <Input
-                                        value={field.label}
-                                        onChange={(e) =>
-                                          handleUpdateProfileField(field.id, {
-                                            label: e.target.value,
-                                          })
-                                        }
-                                        className="border-0 bg-transparent p-0 h-auto focus-visible:ring-0 text-sm"
-                                      />
-                                    </TableCell>
-                                    <TableCell>
-                                      {field.type === "Yes/No" ? (
-                                        <Switch
-                                          checked={field.value}
-                                          onCheckedChange={(checked) =>
-                                            handleUpdateProfileField(field.id, {
-                                              value: checked,
-                                            })
-                                          }
-                                        />
-                                      ) : field.type === "Date" ? (
-                                        <Input
-                                          type="date"
-                                          value={field.value || ""}
-                                          onChange={(e) =>
-                                            handleUpdateProfileField(field.id, {
-                                              value: e.target.value,
-                                            })
-                                          }
-                                          className="text-sm"
-                                        />
-                                      ) : field.type === "Number" ? (
-                                        <Input
-                                          type="number"
-                                          value={field.value || ""}
-                                          onChange={(e) =>
-                                            handleUpdateProfileField(field.id, {
-                                              value: e.target.value,
-                                            })
-                                          }
-                                          className="text-sm"
-                                        />
-                                      ) : field.type === "Multi-line text" ? (
-                                        <Textarea
-                                          value={field.value || ""}
-                                          onChange={(e) =>
-                                            handleUpdateProfileField(field.id, {
-                                              value: e.target.value,
-                                            })
-                                          }
-                                          className="text-sm min-h-[60px]"
-                                        />
-                                      ) : (
-                                        <Input
-                                          value={field.value || ""}
-                                          onChange={(e) =>
-                                            handleUpdateProfileField(field.id, {
-                                              value: e.target.value,
-                                            })
-                                          }
-                                          className="text-sm"
-                                        />
-                                      )}
-                                    </TableCell>
-                                    <TableCell className="w-[50px]">
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-8 w-8"
-                                        onClick={() =>
-                                          handleDeleteProfileField(field.id)
-                                        }
-                                      >
-                                        <Trash2 className="w-4 h-4 text-destructive" />
-                                      </Button>
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
-                            </TableBody>
-                          </Table>
+                    <div className="space-y-4">
+                      {/* Special Fields: Languages, Skills, Salary */}
+                      {/* Languages */}
+                      <div>
+                        <div className="flex items-center gap-2 mb-2">
+                          {editingSpecialFieldLabel === "languages" ? (
+                            <Input
+                              value={languagesLabel}
+                              onChange={(e) => setLanguagesLabel(e.target.value)}
+                              onBlur={() => setEditingSpecialFieldLabel(null)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") setEditingSpecialFieldLabel(null);
+                              }}
+                              className="text-sm font-medium h-7 w-48"
+                              autoFocus
+                            />
+                          ) : (
+                            <Label 
+                              className="text-sm font-medium cursor-pointer hover:text-primary"
+                              onClick={() => setEditingSpecialFieldLabel("languages")}
+                            >
+                              {languagesLabel}
+                            </Label>
+                          )}
+                          <Pencil 
+                            className="w-3 h-3 text-muted-foreground cursor-pointer hover:text-primary" 
+                            onClick={() => setEditingSpecialFieldLabel("languages")}
+                          />
                         </div>
+                        {editingSpecialField === "languages" ? (
+                          <div className="space-y-2">
+                            <Textarea
+                              value={languages}
+                              onChange={(e) => setLanguages(e.target.value)}
+                              placeholder="Enter languages (e.g., English, German, Spanish)"
+                              className="text-sm min-h-[80px]"
+                              autoFocus
+                            />
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                onClick={() =>
+                                  handleSpecialFieldSave("languages")
+                                }
+                              >
+                                <Save className="w-3 h-3 mr-1" />
+                                Save
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  handleSpecialFieldCancel("languages")
+                                }
+                              >
+                                <X className="w-3 h-3 mr-1" />
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <p
+                            className="text-sm text-muted-foreground whitespace-pre-wrap cursor-pointer hover:bg-muted/50 p-2 rounded transition-colors"
+                            onClick={() => setEditingSpecialField("languages")}
+                          >
+                            {languages || "No languages specified"}
+                          </p>
+                        )}
+                      </div>
 
-                        {profileFields.length > 3 && (
-                          <div className="mt-3 text-center">
+                      {/* Skills */}
+                      <div>
+                        <div className="flex items-center gap-2 mb-2">
+                          {editingSpecialFieldLabel === "skills" ? (
+                            <Input
+                              value={skillsLabel}
+                              onChange={(e) => setSkillsLabel(e.target.value)}
+                              onBlur={() => setEditingSpecialFieldLabel(null)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") setEditingSpecialFieldLabel(null);
+                              }}
+                              className="text-sm font-medium h-7 w-48"
+                              autoFocus
+                            />
+                          ) : (
+                            <Label 
+                              className="text-sm font-medium cursor-pointer hover:text-primary"
+                              onClick={() => setEditingSpecialFieldLabel("skills")}
+                            >
+                              {skillsLabel}
+                            </Label>
+                          )}
+                          <Pencil 
+                            className="w-3 h-3 text-muted-foreground cursor-pointer hover:text-primary" 
+                            onClick={() => setEditingSpecialFieldLabel("skills")}
+                          />
+                        </div>
+                        {editingSpecialField === "skills" ? (
+                          <div className="space-y-2">
+                            <Textarea
+                              value={skills}
+                              onChange={(e) => setSkills(e.target.value)}
+                              placeholder="Enter skills (e.g., Project Management, Safety Training)"
+                              className="text-sm min-h-[80px]"
+                              autoFocus
+                            />
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                onClick={() => handleSpecialFieldSave("skills")}
+                              >
+                                <Save className="w-3 h-3 mr-1" />
+                                Save
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  handleSpecialFieldCancel("skills")
+                                }
+                              >
+                                <X className="w-3 h-3 mr-1" />
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <p
+                            className="text-sm text-muted-foreground whitespace-pre-wrap cursor-pointer hover:bg-muted/50 p-2 rounded transition-colors"
+                            onClick={() => setEditingSpecialField("skills")}
+                          >
+                            {skills || "No skills specified"}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Salary */}
+                      <div>
+                        <div className="flex items-center gap-2 mb-2">
+                          {editingSpecialFieldLabel === "salary" ? (
+                            <Input
+                              value={salaryLabel}
+                              onChange={(e) => setSalaryLabel(e.target.value)}
+                              onBlur={() => setEditingSpecialFieldLabel(null)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") setEditingSpecialFieldLabel(null);
+                              }}
+                              className="text-sm font-medium h-7 w-48"
+                              autoFocus
+                            />
+                          ) : (
+                            <Label 
+                              className="text-sm font-medium cursor-pointer hover:text-primary"
+                              onClick={() => setEditingSpecialFieldLabel("salary")}
+                            >
+                              {salaryLabel}
+                            </Label>
+                          )}
+                          <Pencil 
+                            className="w-3 h-3 text-muted-foreground cursor-pointer hover:text-primary" 
+                            onClick={() => setEditingSpecialFieldLabel("salary")}
+                          />
+                        </div>
+                        {editingSpecialField === "salary" ? (
+                          <div className="space-y-2">
+                            <Input
+                              type="text"
+                              value={salary}
+                              onChange={(e) => setSalary(e.target.value)}
+                              placeholder="Enter salary (e.g., €50,000 per year)"
+                              className="text-sm"
+                              autoFocus
+                            />
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                onClick={() => handleSpecialFieldSave("salary")}
+                              >
+                                <Save className="w-3 h-3 mr-1" />
+                                Save
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  handleSpecialFieldCancel("salary")
+                                }
+                              >
+                                <X className="w-3 h-3 mr-1" />
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <p
+                            className="text-sm text-muted-foreground cursor-pointer hover:bg-muted/50 p-2 rounded transition-colors"
+                            onClick={() => setEditingSpecialField("salary")}
+                          >
+                            {salary || "No salary specified"}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Custom Profile Fields - Same style as special fields */}
+                      {profileFields.map((field) => (
+                        <div key={field.id}>
+                          <div className="flex items-center gap-2 mb-2">
+                            {editingCustomFieldLabel === field.id ? (
+                              <Input
+                                value={customFieldLabelEditValue}
+                                onChange={(e) => setCustomFieldLabelEditValue(e.target.value)}
+                                onBlur={() => {
+                                  handleUpdateProfileField(field.id, {
+                                    label: customFieldLabelEditValue,
+                                  });
+                                  setEditingCustomFieldLabel(null);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    handleUpdateProfileField(field.id, {
+                                      label: customFieldLabelEditValue,
+                                    });
+                                    setEditingCustomFieldLabel(null);
+                                  }
+                                }}
+                                className="text-sm font-medium h-7 w-48"
+                                autoFocus
+                              />
+                            ) : (
+                              <Label 
+                                className="text-sm font-medium cursor-pointer hover:text-primary"
+                                onClick={() => {
+                                  setEditingCustomFieldLabel(field.id);
+                                  setCustomFieldLabelEditValue(field.label);
+                                }}
+                              >
+                                {field.label}
+                              </Label>
+                            )}
+                            <Pencil 
+                              className="w-3 h-3 text-muted-foreground cursor-pointer hover:text-primary" 
+                              onClick={() => {
+                                setEditingCustomFieldLabel(field.id);
+                                setCustomFieldLabelEditValue(field.label);
+                              }}
+                            />
                             <Button
                               variant="ghost"
-                              size="sm"
-                              className="text-xs"
-                              onClick={() =>
-                                setShowAllProfileFields(!showAllProfileFields)
-                              }
+                              size="icon"
+                              className="h-6 w-6 ml-auto"
+                              onClick={() => handleDeleteProfileField(field.id)}
                             >
-                              {showAllProfileFields
-                                ? "Show less"
-                                : `Show more (${profileFields.length - 3})`}
+                              <Trash2 className="w-3 h-3 text-destructive" />
                             </Button>
                           </div>
-                        )}
-                      </>
-                    ) : (
-                      <div className="text-center py-8 text-muted-foreground text-sm">
-                        No custom fields yet. Click "Add profile field" to
-                        create one.
-                      </div>
-                    )}
+                          
+                          {/* Editable value section */}
+                          {editingCustomField === field.id ? (
+                            <div className="space-y-2">
+                              {field.type === "Yes/No" ? (
+                                <div className="flex items-center gap-2 p-2">
+                                  <Switch
+                                    checked={customFieldEditValue}
+                                    onCheckedChange={(checked) =>
+                                      setCustomFieldEditValue(checked)
+                                    }
+                                  />
+                                  <span className="text-sm text-muted-foreground">
+                                    {customFieldEditValue ? "Yes" : "No"}
+                                  </span>
+                                </div>
+                              ) : field.type === "Date" ? (
+                                <Input
+                                  type="date"
+                                  value={customFieldEditValue || ""}
+                                  onChange={(e) =>
+                                    setCustomFieldEditValue(e.target.value)
+                                  }
+                                  className="text-sm"
+                                  autoFocus
+                                />
+                              ) : field.type === "Number" ? (
+                                <Input
+                                  type="number"
+                                  value={customFieldEditValue || ""}
+                                  onChange={(e) =>
+                                    setCustomFieldEditValue(e.target.value)
+                                  }
+                                  placeholder="Enter number"
+                                  className="text-sm"
+                                  autoFocus
+                                />
+                              ) : field.type === "Multi-line text" ? (
+                                <Textarea
+                                  value={customFieldEditValue || ""}
+                                  onChange={(e) =>
+                                    setCustomFieldEditValue(e.target.value)
+                                  }
+                                  placeholder="Enter text"
+                                  className="text-sm min-h-[80px]"
+                                  autoFocus
+                                />
+                              ) : (
+                                <Input
+                                  type="text"
+                                  value={customFieldEditValue || ""}
+                                  onChange={(e) =>
+                                    setCustomFieldEditValue(e.target.value)
+                                  }
+                                  placeholder="Enter text"
+                                  className="text-sm"
+                                  autoFocus
+                                />
+                              )}
+                              
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  onClick={() => {
+                                    handleUpdateProfileField(field.id, {
+                                      value: customFieldEditValue,
+                                    });
+                                    setEditingCustomField(null);
+                                  }}
+                                >
+                                  <Save className="w-3 h-3 mr-1" />
+                                  Save
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setEditingCustomField(null);
+                                    setCustomFieldEditValue("");
+                                  }}
+                                >
+                                  <X className="w-3 h-3 mr-1" />
+                                  Cancel
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <p
+                              className="text-sm text-muted-foreground whitespace-pre-wrap cursor-pointer hover:bg-muted/50 p-2 rounded transition-colors"
+                              onClick={() => {
+                                setEditingCustomField(field.id);
+                                setCustomFieldEditValue(field.value || "");
+                              }}
+                            >
+                              {field.type === "Yes/No" 
+                                ? (field.value ? "Yes" : "No")
+                                : (field.value || `No ${field.label.toLowerCase()} specified`)
+                              }
+                            </p>
+                          )}
+                        </div>
+                      ))}
+
+                      {/* Empty state */}
+                      {profileFields.length === 0 && (
+                        <div className="border-t pt-4">
+                          <div className="text-center py-4 text-muted-foreground text-xs border border-dashed rounded-lg">
+                            No custom fields yet. Click "Add profile field" to create one.
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
               </div>
@@ -2352,6 +2747,15 @@ export default function EmployeeProfile() {
                               </SelectItem>
                             </SelectContent>
                           </Select>
+                          
+                          {/* @ button */}
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => setShowTaskMentionDropdown(!showTaskMentionDropdown)}
+                          >
+                            <AtSign className="w-4 h-4" />
+                          </Button>
                         </div>
                       </div>
 
@@ -2455,23 +2859,6 @@ export default function EmployeeProfile() {
                         </div>
                       </ScrollArea>
 
-                      {/* Hide/Show completed tasks toggle */}
-                      {tasks.filter((t) => t.status === "completed").length >
-                        0 && (
-                        <button
-                          onClick={() =>
-                            setHideCompletedTasks(!hideCompletedTasks)
-                          }
-                          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                          {hideCompletedTasks
-                            ? `Show completed tasks (${
-                                tasks.filter((t) => t.status === "completed")
-                                  .length
-                              })`
-                            : "Hide completed tasks"}
-                        </button>
-                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -2539,6 +2926,7 @@ export default function EmployeeProfile() {
                               variant="ghost"
                               size="sm"
                               className="h-7 w-7 p-0"
+                              onClick={() => setShowNotesMentionDropdown(!showNotesMentionDropdown)}
                             >
                               <AtSign className="w-3.5 h-3.5" />
                             </Button>
@@ -2575,7 +2963,7 @@ export default function EmployeeProfile() {
                                           {emp.full_name}
                                         </div>
                                         <div className="text-xs text-muted-foreground">
-                                          #{emp.employee_number}
+                                          {emp.employee_number} • {emp.role || "Member"}
                                         </div>
                                       </div>
                                     ))}
@@ -2587,10 +2975,24 @@ export default function EmployeeProfile() {
                           {/* Visibility Dropdown */}
                           <div className="flex items-center gap-2 pt-2">
                             <Eye className="w-3.5 h-3.5 text-muted-foreground" />
-                            <span className="text-xs text-muted-foreground">
-                              Visible to everyone
-                            </span>
-                            <ChevronDown className="w-3 h-3 text-muted-foreground" />
+                            <Select
+                              value={selectedNoteVisibility}
+                              onValueChange={setSelectedNoteVisibility}
+                            >
+                              <SelectTrigger className="h-7 text-xs w-auto border-0 px-0 gap-1 hover:bg-transparent focus:ring-0">
+                                <SelectValue placeholder="Select user" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {teamMembers.map((member) => (
+                                  <SelectItem 
+                                    key={member.id} 
+                                    value={member.id}
+                                  >
+                                    {member.first_name} {member.last_name} ({member.role || "User"})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </div>
                         </div>
 
@@ -2603,6 +3005,7 @@ export default function EmployeeProfile() {
                           >
                             Cancel
                           </Button>
+                         
                           <Button
                             onClick={handleSaveNotes}
                             size="sm"
@@ -2661,12 +3064,13 @@ export default function EmployeeProfile() {
                                         <Button
                                           variant="ghost"
                                           size="sm"
-                                          className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                                          className="h-8 w-8 p-1 text-destructive hover:text-destructive hover:bg-destructive/10 flex-shrink-0"
                                           onClick={() =>
                                             handleDeleteNote(note.id)
                                           }
+                                          title="Delete note"
                                         >
-                                          <Trash2 className="w-3 h-3" />
+                                          <Trash2 className="w-4 h-4" />
                                         </Button>
                                       </div>
 
@@ -2684,12 +3088,91 @@ export default function EmployeeProfile() {
                                           <ThumbsUp className="w-3 h-3 mr-1" />
                                           Like
                                         </Button>
+                                       
                                         <Button
                                           variant="ghost"
                                           size="sm"
                                           className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+                                          onClick={async () => {
+                                            try {
+                                              // Extract @mentions from the note content
+                                              // Captures exactly 2-word names (e.g., "kishore mk", "varun j")
+                                              const mentionRegex = /@([a-z]+\s+[a-z]+)/gi;
+                                              const mentions: string[] = [];
+                                              let match;
+                                              
+                                              while ((match = mentionRegex.exec(note.content)) !== null) {
+                                                mentions.push(match[1].trim());
+                                              }
+                                              
+                                              console.log("Extracted mentions:", mentions);
+
+                                              if (mentions.length === 0) {
+                                                toast.error("No @mentions found in this note");
+                                                return;
+                                              }
+
+                                              // Get current user
+                                              const { data: { user } } = await supabase.auth.getUser();
+                                              const currentUserName = user?.user_metadata?.full_name || "Admin";
+
+                                              // Fetch team members from Settings
+                                              const { data: teamMembers, error: teamError } = await supabase
+                                                .from("team_members")
+                                                .select("*");
+
+                                              if (teamError) {
+                                                console.error("Error fetching team members:", teamError);
+                                                toast.error("Failed to fetch team members");
+                                                return;
+                                              }
+
+                                              let successCount = 0;
+                                              let errorCount = 0;
+
+                                              // Send notification to each mentioned person
+                                              for (const mentionedName of mentions) {
+                                                try {
+                                                  // Find mentioned person in team members (case-insensitive)
+                                                  const mentionedMember = teamMembers?.find(
+                                                    (member) => {
+                                                      const fullName = `${member.first_name} ${member.last_name}`.toLowerCase().trim();
+                                                      return fullName === mentionedName.toLowerCase().trim();
+                                                    }
+                                                  );
+
+                                                  if (mentionedMember?.email) {
+                                                    await sendNoteNotification(
+                                                      mentionedMember.email,
+                                                      `${mentionedMember.first_name} ${mentionedMember.last_name}`,
+                                                      note.content,
+                                                      currentUserName
+                                                    );
+                                                    successCount++;
+                                                  } else {
+                                                    console.log(`No team member found for: "${mentionedName}"`);
+                                                    console.log("Available team members:", teamMembers?.map(m => `${m.first_name} ${m.last_name}`));
+                                                  }
+                                                } catch (err: any) {
+                                                  console.error(`Failed to notify ${mentionedName}:`, err);
+                                                  errorCount++;
+                                                }
+                                              }
+
+                                              if (successCount > 0) {
+                                                toast.success(`Notification sent to ${successCount} user(s)`);
+                                              }
+                                              if (errorCount > 0 || successCount === 0) {
+                                                toast.error(`Could not notify ${mentions.length - successCount} user(s)`);
+                                              }
+                                            } catch (err: any) {
+                                              console.error("Failed to send notification:", err);
+                                              toast.error("Failed to send notification");
+                                            }
+                                          }}
                                         >
-                                          <RefreshCw className="w-3 h-3 mr-1" />
+                                          <Bell className="w-3 h-3 mr-1" />
+                                          Notify
                                         </Button>
                                         <Button
                                           variant="ghost"
@@ -2795,147 +3278,207 @@ export default function EmployeeProfile() {
                   </p>
                 ) : (
                   <div className="space-y-4">
-                    {healthCheckups.map((checkup) => (
-                      <Card key={checkup.id} className="p-4">
-                        <div className="space-y-4">
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-2">
-                                <p className="font-semibold">
-                                  {checkup.investigation_name ||
-                                    gInvestigations.find(
-                                      (g) => g.id === checkup.investigation_id
-                                    )?.name ||
-                                    "Investigation"}
-                                </p>
-                                <Badge
-                                  variant={
-                                    checkup.status === "done"
-                                      ? "default"
-                                      : checkup.status === "open"
-                                      ? "destructive"
-                                      : "secondary"
-                                  }
-                                >
-                                  {checkup.status.toUpperCase()}
-                                </Badge>
-                              </div>
-                              <div className="text-sm space-y-1">
-                                <p>
-                                  <span className="text-muted-foreground">
-                                    Appointment:
-                                  </span>{" "}
-                                  <span className="font-medium">
-                                    {checkup.appointment_date
-                                      ? new Date(
-                                          checkup.appointment_date
-                                        ).toLocaleDateString("en-US", {
-                                          year: "numeric",
-                                          month: "long",
-                                          day: "numeric",
-                                        })
-                                      : "Not set"}
-                                  </span>
-                                </p>
-                                {checkup.completion_date && (
-                                  <p>
-                                    <span className="text-muted-foreground">
-                                      Completed:
-                                    </span>{" "}
-                                    <span className="font-medium">
-                                      {new Date(
-                                        checkup.completion_date
-                                      ).toLocaleDateString("en-US", {
-                                        year: "numeric",
-                                        month: "long",
-                                        day: "numeric",
-                                      })}
-                                    </span>
-                                  </p>
-                                )}
-                                {checkup.notes && (
-                                  <p className="text-muted-foreground">
-                                    {checkup.notes}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-destructive hover:text-destructive"
-                              onClick={() => handleDeleteCheckup(checkup.id)}
+                    {healthCheckups.map((checkup) => {
+                      // Calculate if checkup is overdue (applies to both 'open' and 'planned')
+                      const today = new Date();
+                      const dueDate = checkup.due_date ? new Date(checkup.due_date) : null;
+                      const isOverdue = dueDate && today > dueDate && (checkup.status === 'open' || checkup.status === 'planned');
+                      
+                      return (
+                      <Card key={checkup.id} className={`p-4 border rounded-lg space-y-3 ${
+                        (() => {
+                          if (checkup.status === 'done') return 'bg-green-50 border-green-200';
+                          if (isOverdue) return 'bg-red-50 border-red-200';
+                          if (checkup.status === 'planned' || checkup.status === 'open') return 'bg-blue-50 border-blue-200';
+                          return 'bg-gray-50 border-gray-200';
+                        })()
+                      }`}>
+                        {/* Investigation Name */}
+                        <h3 className="font-semibold text-base">
+                          {(() => {
+                            // Check if investigation_name looks like a UUID (contains hyphens and is long)
+                            const isUUID = checkup.investigation_name?.includes('-') && checkup.investigation_name?.length > 30;
+                            
+                            // If it's a UUID or empty, look up from gInvestigations using investigation_id
+                            if (!checkup.investigation_name || isUUID) {
+                              const investigation = gInvestigations.find(
+                                (g) => g.id === checkup.investigation_id
+                              );
+                              return investigation?.name || "Investigation";
+                            }
+                            
+                            // Otherwise use the stored investigation_name
+                            return checkup.investigation_name;
+                          })()}
+                        </h3>
+                        
+                        {/* Due Date - When investigation expires (no special styling) */}
+                        <div className="text-sm text-muted-foreground">
+                          <span className="font-medium">
+                            Due Date: {checkup.due_date 
+                              ? new Date(checkup.due_date).toLocaleDateString('de-DE')
+                              : 'Not calculated yet'}
+                          </span>
+                        </div>
+                        
+                        {/* Status Badge - Automatic, Read-only */}
+                        <div className="flex items-center gap-2">
+                          
+                          
+                          {/* Manual Status Override */}
+                          <Select
+                            value={checkup.status}
+                            onValueChange={(value) =>
+                              handleUpdateCheckup(checkup.id, {
+                                status: value,
+                              })
+                            }
+                          >
+                            <SelectTrigger 
+                              className={`w-32 h-8 ${
+                                checkup.status === 'done' 
+                                  ? 'bg-green-100 text-green-800 border-green-300' 
+                                  : isOverdue
+                                  ? 'bg-red-100 text-red-800 border-red-300'
+                                  : (checkup.status === 'open' || checkup.status === 'planned')
+                                  ? 'bg-blue-100 text-blue-800 border-blue-300' 
+                                  : ''
+                              }`}
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="planned">Planned</SelectItem>
+                              <SelectItem value="open">Open</SelectItem>
+                              <SelectItem value="done">Done</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        
+                        {/* Appointment Info (only show if set) */}
+                        {checkup.appointment_date && (
+                          <p className="text-sm text-muted-foreground">
+                            Appointment: {new Date(checkup.appointment_date).toLocaleDateString('de-DE')}
+                          </p>
+                        )}
+                        
+                        {/* Notes (if any) */}
+                        {checkup.notes && (
+                          <p className="text-xs text-muted-foreground italic">
+                            {checkup.notes}
+                          </p>
+                        )}
+                        
+                        {/* Action Buttons */}
+                        <div className="flex gap-2 flex-wrap pt-2">
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedCheckupForAppointment(checkup);
+                              setAppointmentDate(checkup.appointment_date ? new Date(checkup.appointment_date) : undefined);
+                              setIsAppointmentDialogOpen(true);
+                            }}
+                            className="text-xs"
+                          >
+                            <CalendarIcon className="w-3 h-3 mr-1" />
+                            Set Appointment
+                          </Button>
+                          
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => {
+                              const completionDate = new Date().toISOString().split('T')[0];
+                              // Calculate due date as 3 years from completion
+                              const dueDate = new Date();
+                              dueDate.setFullYear(dueDate.getFullYear() + 3);
+                              const dueDateString = dueDate.toISOString().split('T')[0];
+                              
+                              handleUpdateCheckup(checkup.id, {
+                                status: 'done',
+                                completion_date: completionDate,
+                                due_date: dueDateString,
+                              });
+                            }}
+                            disabled={checkup.status === 'done' || !!checkup.completion_date}
+                            className="text-xs"
+                          >
+                            <CheckCircle className="w-3 h-3 mr-1" />
+                            Complete
+                          </Button>
+                          
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => handleDeleteCheckup(checkup.id)}
+                            className="text-xs"
+                          >
+                            <Trash2 className="w-3 h-3 mr-1" />
+                            Delete
+                          </Button>
+                          
+                          {/* Upload Document Button */}
+                          <div>
+                            <input
+                              type="file"
+                              id={`doc-upload-${checkup.id}`}
+                              className="hidden"
+                              onChange={(e) => handleCheckupDocumentUpload(e, checkup.id)}
+                              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                            />
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => document.getElementById(`doc-upload-${checkup.id}`)?.click()}
+                              disabled={uploadingDocument === checkup.id}
+                              className="text-xs"
+                            >
+                              <Upload className="w-3 h-3 mr-1" />
+                              {uploadingDocument === checkup.id ? 'Uploading...' : 'Upload Document'}
                             </Button>
                           </div>
-
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <Select
-                              value={checkup.status}
-                              onValueChange={(value) =>
-                                handleUpdateCheckup(checkup.id, {
-                                  status: value,
-                                })
-                              }
-                            >
-                              <SelectTrigger className="w-32">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="planned">Planned</SelectItem>
-                                <SelectItem value="open">Open</SelectItem>
-                                <SelectItem value="done">Done</SelectItem>
-                              </SelectContent>
-                            </Select>
-
-                            {checkup.status === "done" &&
-                              !checkup.completion_date && (
-                                <Input
-                                  type="date"
-                                  placeholder="Completion date"
-                                  className="w-48"
-                                  onChange={(e) =>
-                                    handleUpdateCheckup(checkup.id, {
-                                      completion_date: e.target.value,
-                                    })
-                                  }
-                                />
-                              )}
-
-                            <div className="flex gap-2">
-                              {checkup.certificate_url ? (
-                                <Button variant="outline" size="sm" asChild>
-                                  <a
-                                    href={checkup.certificate_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                  >
-                                    <FileText className="w-4 h-4 mr-2" />
-                                    View Certificate
-                                  </a>
-                                </Button>
-                              ) : (
-                                <Button variant="outline" size="sm" asChild>
-                                  <label className="cursor-pointer">
-                                    <Upload className="w-4 h-4 mr-2" />
-                                    Upload Certificate
-                                    <input
-                                      type="file"
-                                      className="hidden"
-                                      accept=".pdf,.jpg,.jpeg,.png"
-                                      onChange={(e) =>
-                                        handleCertificateUpload(e, checkup.id)
-                                      }
-                                    />
-                                  </label>
-                                </Button>
-                              )}
+                        </div>
+                        
+                        {/* Documents List */}
+                        {checkupDocuments[checkup.id] && checkupDocuments[checkup.id].length > 0 && (
+                          <div className="mt-3 pt-3 border-t">
+                            <p className="text-xs font-medium mb-2">Attached Documents:</p>
+                            <div className="space-y-1">
+                              {checkupDocuments[checkup.id].map((doc: any) => (
+                                <div key={doc.id} className="flex items-center justify-between bg-muted/50 rounded px-2 py-1">
+                                  <div className="flex items-center gap-1 text-xs flex-1">
+                                    <FileText className="w-3 h-3 text-blue-600" />
+                                    <span className="truncate">{doc.file_name}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handlePreviewCheckupDocument(doc.file_path)}
+                                      className="h-6 w-6 p-0"
+                                      title="Preview document"
+                                    >
+                                      <Eye className="w-3 h-3 text-blue-600" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleDeleteCheckupDocument(doc.id, doc.file_path)}
+                                      className="h-6 w-6 p-0"
+                                      title="Delete document"
+                                    >
+                                      <Trash2 className="w-3 h-3 text-red-600" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
                           </div>
-                        </div>
+                        )}
                       </Card>
-                    ))}
+                    );
+                    })}
                   </div>
                 )}
               </CardContent>
@@ -3007,18 +3550,35 @@ export default function EmployeeProfile() {
                     )}
                   </div>
 
-                  <div>
-                    <Label>Appointment Date *</Label>
-                    <Input
-                      type="date"
-                      value={checkupFormData.appointment_date}
-                      onChange={(e) =>
-                        setCheckupFormData({
-                          ...checkupFormData,
-                          appointment_date: e.target.value,
-                        })
-                      }
-                    />
+                  {/* Date Fields - Row Layout */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>Appointment Date</Label>
+                      <Input
+                        type="date"
+                        value={checkupFormData.appointment_date}
+                        onChange={(e) =>
+                          setCheckupFormData({
+                            ...checkupFormData,
+                            appointment_date: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    
+                    <div>
+                      <Label>Due Date</Label>
+                      <Input
+                        type="date"
+                        value={checkupFormData.due_date}
+                        onChange={(e) =>
+                          setCheckupFormData({
+                            ...checkupFormData,
+                            due_date: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
                   </div>
 
                   <div>
@@ -3083,6 +3643,71 @@ export default function EmployeeProfile() {
                   <Button onClick={handleCreateCheckup}>
                     <Plus className="w-4 h-4 mr-2" />
                     Add Check-Up
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* Set Appointment Dialog */}
+            <Dialog
+              open={isAppointmentDialogOpen}
+              onOpenChange={setIsAppointmentDialogOpen}
+            >
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Set Appointment Date</DialogTitle>
+                  <DialogDescription>
+                    Choose an appointment date for this health check-up
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <Label>Appointment Date *</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="w-full justify-start text-left font-normal"
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {appointmentDate ? (
+                            format(appointmentDate, "PPP")
+                          ) : (
+                            <span>Pick a date</span>
+                          )}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar
+                          mode="single"
+                          selected={appointmentDate}
+                          onSelect={setAppointmentDate}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsAppointmentDialogOpen(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      if (appointmentDate && selectedCheckupForAppointment) {
+                        handleUpdateCheckup(selectedCheckupForAppointment.id, {
+                          appointment_date: format(appointmentDate, "yyyy-MM-dd"),
+                        });
+                        setIsAppointmentDialogOpen(false);
+                      } else {
+                        toast.error("Please select a date");
+                      }
+                    }}
+                  >
+                    Save Appointment
                   </Button>
                 </DialogFooter>
               </DialogContent>

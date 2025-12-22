@@ -192,6 +192,7 @@ export default function EmployeeProfile() {
   const [employees, setEmployees] = useState<any[]>([]);
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
   const [selectedNoteVisibility, setSelectedNoteVisibility] = useState<string>("");
+  const [userProfile, setUserProfile] = useState<any>(null); // Store logged-in user's profile
 
   // Task enhancement states
   const [newTaskDueDate, setNewTaskDueDate] = useState<Date | undefined>(
@@ -295,6 +296,7 @@ export default function EmployeeProfile() {
       fetchGInvestigations();
       fetchProfileFields();
       fetchTeamMembers();
+      fetchUserProfile(); // Fetch logged-in user's profile for note authorship
     }
   }, [id, companyId]);
 
@@ -655,6 +657,24 @@ export default function EmployeeProfile() {
     }
   };
 
+  const fetchUserProfile = async () => {
+    if (!user?.id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("first_name, last_name, full_name, email")
+        .eq("id", user.id)
+        .single();
+
+      if (!error && data) {
+        setUserProfile(data);
+      }
+    } catch (error) {
+      console.error("Error fetching user profile:", error);
+    }
+  };
+
   const fetchProfileFields = async () => {
     if (!id) return;
 
@@ -826,8 +846,8 @@ export default function EmployeeProfile() {
       // Handle name fields - combine into full_name
       if (field === "first_name" || field === "last_name") {
         const newFullName = `${field === "first_name"
-            ? firstName
-            : employee?.full_name.split(" ")[0] || ""
+          ? firstName
+          : employee?.full_name.split(" ")[0] || ""
           } ${field === "last_name"
             ? lastName
             : employee?.full_name.split(" ").slice(1).join(" ") || ""
@@ -935,21 +955,25 @@ export default function EmployeeProfile() {
         // If parsing fails, treat as empty
       }
 
-      // Get the selected team member's name
+      // Get the logged-in user's name with priority fallback
       let authorName = "Anonymous";
-      if (selectedNoteVisibility) {
-        const selectedMember = teamMembers.find(m => m.id === selectedNoteVisibility);
-        if (selectedMember) {
-          authorName = `${selectedMember.first_name} ${selectedMember.last_name}`;
+      if (userProfile) {
+        if (userProfile.first_name && userProfile.last_name) {
+          authorName = `${userProfile.first_name} ${userProfile.last_name}`;
+        } else if (userProfile.full_name) {
+          authorName = userProfile.full_name;
+        } else if (userProfile.email) {
+          authorName = userProfile.email;
         }
       }
 
       const newNoteObj = {
         id: Date.now().toString(),
         content: notes,
-        author: authorName, // Use selected team member's name
+        author: authorName,
+        author_id: user?.id || null, // Store user ID for future reference
         date: new Date().toISOString(),
-        visibleTo: selectedNoteVisibility, // Add visibility tracking
+        visibleTo: selectedNoteVisibility, // Keep visibility tracking
         replies: [],
       };
 
@@ -2710,10 +2734,10 @@ export default function EmployeeProfile() {
                                 <span className="flex items-center gap-1">
                                   <span
                                     className={`w-2 h-2 rounded-full ${newTaskPriority === "high"
-                                        ? "bg-red-500"
-                                        : newTaskPriority === "medium"
-                                          ? "bg-yellow-500"
-                                          : "bg-green-500"
+                                      ? "bg-red-500"
+                                      : newTaskPriority === "medium"
+                                        ? "bg-yellow-500"
+                                        : "bg-green-500"
                                       }`}
                                   />
                                   PR
@@ -3280,11 +3304,11 @@ export default function EmployeeProfile() {
 
                       return (
                         <Card key={checkup.id} className={`p-4 border rounded-lg space-y-3 ${(() => {
-                            if (checkup.status === 'done') return 'bg-green-50 border-green-200';
-                            if (isOverdue) return 'bg-red-50 border-red-200';
-                            if (checkup.status === 'planned' || checkup.status === 'open') return 'bg-blue-50 border-blue-200';
-                            return 'bg-gray-50 border-gray-200';
-                          })()
+                          if (checkup.status === 'done') return 'bg-green-50 border-green-200';
+                          if (isOverdue) return 'bg-red-50 border-red-200';
+                          if (checkup.status === 'planned' || checkup.status === 'open') return 'bg-blue-50 border-blue-200';
+                          return 'bg-gray-50 border-gray-200';
+                        })()
                           }`}>
                           {/* Investigation Name */}
                           <h3 className="font-semibold text-base">
@@ -3329,12 +3353,12 @@ export default function EmployeeProfile() {
                             >
                               <SelectTrigger
                                 className={`w-32 h-8 ${checkup.status === 'done'
-                                    ? 'bg-green-100 text-green-800 border-green-300'
-                                    : isOverdue
-                                      ? 'bg-red-100 text-red-800 border-red-300'
-                                      : (checkup.status === 'open' || checkup.status === 'planned')
-                                        ? 'bg-blue-100 text-blue-800 border-blue-300'
-                                        : ''
+                                  ? 'bg-green-100 text-green-800 border-green-300'
+                                  : isOverdue
+                                    ? 'bg-red-100 text-red-800 border-red-300'
+                                    : (checkup.status === 'open' || checkup.status === 'planned')
+                                      ? 'bg-blue-100 text-blue-800 border-blue-300'
+                                      : ''
                                   }`}
                               >
                                 <SelectValue />
@@ -3723,8 +3747,8 @@ export default function EmployeeProfile() {
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
                   className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${isDragging
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:border-primary/50"
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:border-primary/50"
                     }`}
                 >
                   <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />

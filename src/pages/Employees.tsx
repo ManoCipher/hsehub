@@ -591,11 +591,11 @@ export default function Employees() {
       fetchEmployees();
     } catch (error: any) {
       console.error("Error deleting employees:", error);
-      
+
       // Show detailed error message
       const errorMessage = error?.message || error?.details || error?.hint || "Failed to delete employees";
       const errorDetails = error?.code ? ` (Error code: ${error.code})` : "";
-      
+
       toast.error(`${errorMessage}${errorDetails}`);
     } finally {
       setIsDeleting(false);
@@ -1115,7 +1115,7 @@ export default function Employees() {
                           className="font-medium cursor-pointer"
                           onClick={() => navigate(`/employees/${employee.id}`)}
                         >
-                          {employee.full_name}
+                          {employee.full_name || "Unnamed Employee"}
                         </TableCell>
                         <TableCell
                           className="cursor-pointer"
@@ -1176,7 +1176,7 @@ export default function Employees() {
         <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
           <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
             <SheetHeader>
-              <SheetTitle>{selectedEmployee?.full_name}</SheetTitle>
+              <SheetTitle>{selectedEmployee?.full_name || "Employee Details"}</SheetTitle>
               <SheetDescription>{t("employees.details")}</SheetDescription>
             </SheetHeader>
 
@@ -1282,11 +1282,10 @@ export default function Employees() {
         {/* Tasks Dialog */}
         <Dialog open={isTasksDialogOpen} onOpenChange={setIsTasksDialogOpen}>
           <DialogContent
-            className={`transition-all duration-300 ${
-              showMentionDropdown && filteredEmployeesForMention.length > 0
-                ? "max-w-2xl max-h-[600px]"
-                : "max-w-xl max-h-[200px]"
-            }`}
+            className={`transition-all duration-300 ${showMentionDropdown && filteredEmployeesForMention.length > 0
+              ? "max-w-2xl max-h-[600px]"
+              : "max-w-xl max-h-[200px]"
+              }`}
           >
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-base">
@@ -1401,11 +1400,10 @@ export default function Employees() {
         {/* Notes Dialog */}
         <Dialog open={isNotesDialogOpen} onOpenChange={setIsNotesDialogOpen}>
           <DialogContent
-            className={`transition-all duration-300 ${
-              showMentionDropdown && filteredEmployeesForMention.length > 0
-                ? "max-w-2xl max-h-[600px]"
-                : "max-w-xl max-h-[280px]"
-            }`}
+            className={`transition-all duration-300 ${showMentionDropdown && filteredEmployeesForMention.length > 0
+              ? "max-w-2xl max-h-[600px]"
+              : "max-w-xl max-h-[280px]"
+              }`}
           >
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-base">

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -24,9 +25,11 @@ export default function Profile() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [profileData, setProfileData] = useState({
-    firstName: "Company",
-    lastName: "Admin",
+    firstName: "",
+    lastName: "",
     email: user?.email || "",
   });
 
@@ -36,21 +39,107 @@ export default function Profile() {
     }
   }, [user, loading, navigate]);
 
-  const handleSave = () => {
-    toast({
-      title: t("profile.updated"),
-      description: t("profile.updatedDesc"),
-    });
-    setIsEditing(false);
+  // Fetch profile data from Supabase
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (!user?.id) return;
+
+      setIsLoadingProfile(true);
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("first_name, last_name, email, full_name")
+          .eq("id", user.id)
+          .single();
+
+        if (error) {
+          console.error("Error fetching profile:", error);
+          toast({
+            title: "Error",
+            description: "Failed to load profile data",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        if (data) {
+          setProfileData({
+            firstName: data.first_name || "",
+            lastName: data.last_name || "",
+            email: data.email || user.email || "",
+          });
+        }
+      } catch (error) {
+        console.error("Unexpected error fetching profile:", error);
+      } finally {
+        setIsLoadingProfile(false);
+      }
+    };
+
+    fetchProfile();
+  }, [user, toast]);
+
+  const handleSave = async () => {
+    if (!user?.id) return;
+
+    setIsSaving(true);
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          first_name: profileData.firstName.trim() || null,
+          last_name: profileData.lastName.trim() || null,
+        })
+        .eq("id", user.id);
+
+      if (error) {
+        console.error("Error updating profile:", error);
+        toast({
+          title: "Error",
+          description: "Failed to update profile",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      toast({
+        title: t("profile.updated"),
+        description: t("profile.updatedDesc"),
+      });
+      setIsEditing(false);
+    } catch (error) {
+      console.error("Unexpected error updating profile:", error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  if (loading) {
+  if (loading || isLoadingProfile) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     );
   }
+
+  // Generate avatar initials from profile data
+  const getAvatarInitials = () => {
+    if (profileData.firstName && profileData.lastName) {
+      return `${profileData.firstName.charAt(0)}${profileData.lastName.charAt(0)}`.toUpperCase();
+    }
+    if (profileData.firstName) {
+      return profileData.firstName.charAt(0).toUpperCase();
+    }
+    if (profileData.email) {
+      return profileData.email.charAt(0).toUpperCase();
+    }
+    return "U";
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
@@ -72,9 +161,9 @@ export default function Profile() {
             </div>
           </div>
           {isEditing && (
-            <Button onClick={handleSave}>
+            <Button onClick={handleSave} disabled={isSaving}>
               <Save className="w-4 h-4 mr-2" />
-              {t("profile.saveChanges")}
+              {isSaving ? "Saving..." : t("profile.saveChanges")}
             </Button>
           )}
         </div>
@@ -102,7 +191,7 @@ export default function Profile() {
                   <Avatar className="w-24 h-24">
                     <AvatarImage src="" />
                     <AvatarFallback className="bg-gradient-to-br from-purple-400 to-purple-600 text-white text-2xl">
-                      CA
+                      {getAvatarInitials()}
                     </AvatarFallback>
                   </Avatar>
                   <div className="space-y-2">

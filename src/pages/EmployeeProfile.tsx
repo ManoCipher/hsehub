@@ -3417,7 +3417,7 @@ export default function EmployeeProfile() {
                                   due_date: dueDateString,
                                 });
                               }}
-                              disabled={checkup.status === 'done' || !!checkup.completion_date}
+                              disabled={checkup.status === 'done'}
                               className="text-xs"
                             >
                               <CheckCircle className="w-3 h-3 mr-1" />

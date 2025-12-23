@@ -192,6 +192,7 @@ export default function EmployeeProfile() {
   const [employees, setEmployees] = useState<any[]>([]);
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
   const [selectedNoteVisibility, setSelectedNoteVisibility] = useState<string>("");
+  const [userProfile, setUserProfile] = useState<any>(null); // Store logged-in user's profile
 
   // Task enhancement states
   const [newTaskDueDate, setNewTaskDueDate] = useState<Date | undefined>(
@@ -230,9 +231,9 @@ export default function EmployeeProfile() {
   const [profileFields, setProfileFields] = useState<any[]>([]);
   const [showProfileFieldMenu, setShowProfileFieldMenu] = useState(false);
   const [showAllProfileFields, setShowAllProfileFields] = useState(false);
-  
+
   // Debounce timer ref for profile field updates
-  const debounceTimerRef = useRef<{[key: string]: NodeJS.Timeout}>({});
+  const debounceTimerRef = useRef<{ [key: string]: NodeJS.Timeout }>({});
 
   // Special profile fields (languages, skills, salary)
   const [languages, setLanguages] = useState("");
@@ -241,13 +242,13 @@ export default function EmployeeProfile() {
   const [editingSpecialField, setEditingSpecialField] = useState<string | null>(
     null
   );
-  
+
   // Editable labels for special fields
   const [languagesLabel, setLanguagesLabel] = useState("Languages Known");
   const [skillsLabel, setSkillsLabel] = useState("Skills");
   const [salaryLabel, setSalaryLabel] = useState("Salary");
   const [editingSpecialFieldLabel, setEditingSpecialFieldLabel] = useState<string | null>(null);
-  
+
   // State for editing custom profile fields
   const [editingCustomField, setEditingCustomField] = useState<string | null>(null);
   const [customFieldEditValue, setCustomFieldEditValue] = useState<any>("");
@@ -295,6 +296,7 @@ export default function EmployeeProfile() {
       fetchGInvestigations();
       fetchProfileFields();
       fetchTeamMembers();
+      fetchUserProfile(); // Fetch logged-in user's profile for note authorship
     }
   }, [id, companyId]);
 
@@ -382,7 +384,7 @@ export default function EmployeeProfile() {
         return;
       }
       setHealthCheckups((data as any) || []);
-      
+
       // Fetch documents for all checkups
       if (data && data.length > 0) {
         fetchAllCheckupDocuments(data.map(c => c.id));
@@ -597,7 +599,7 @@ export default function EmployeeProfile() {
         .eq("company_id", companyId);
 
       if (error) throw error;
-      
+
       // Map to employees format for @ mention display
       setEmployees((data || []).map((tm: any) => ({
         id: tm.id,
@@ -652,6 +654,24 @@ export default function EmployeeProfile() {
     } catch (error) {
       console.error("Error fetching team members:", error);
       setTeamMembers([]);
+    }
+  };
+
+  const fetchUserProfile = async () => {
+    if (!user?.id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("first_name, last_name, full_name, email")
+        .eq("id", user.id)
+        .single();
+
+      if (!error && data) {
+        setUserProfile(data);
+      }
+    } catch (error) {
+      console.error("Error fetching user profile:", error);
     }
   };
 
@@ -825,15 +845,13 @@ export default function EmployeeProfile() {
 
       // Handle name fields - combine into full_name
       if (field === "first_name" || field === "last_name") {
-        const newFullName = `${
-          field === "first_name"
-            ? firstName
-            : employee?.full_name.split(" ")[0] || ""
-        } ${
-          field === "last_name"
+        const newFullName = `${field === "first_name"
+          ? firstName
+          : employee?.full_name.split(" ")[0] || ""
+          } ${field === "last_name"
             ? lastName
             : employee?.full_name.split(" ").slice(1).join(" ") || ""
-        }`;
+          }`;
         updateData.full_name = newFullName.trim();
       } else {
         updateData[field] = formData[field as keyof EmployeeData];
@@ -849,8 +867,7 @@ export default function EmployeeProfile() {
       await logActivity(
         `Updated ${field}`,
         "update",
-        `Changed ${field} from "${
-          employee?.[field as keyof EmployeeData] || "empty"
+        `Changed ${field} from "${employee?.[field as keyof EmployeeData] || "empty"
         }" to "${updateData[field]}"`,
         {
           field,
@@ -938,21 +955,25 @@ export default function EmployeeProfile() {
         // If parsing fails, treat as empty
       }
 
-      // Get the selected team member's name
+      // Get the logged-in user's name with priority fallback
       let authorName = "Anonymous";
-      if (selectedNoteVisibility) {
-        const selectedMember = teamMembers.find(m => m.id === selectedNoteVisibility);
-        if (selectedMember) {
-          authorName = `${selectedMember.first_name} ${selectedMember.last_name}`;
+      if (userProfile) {
+        if (userProfile.first_name && userProfile.last_name) {
+          authorName = `${userProfile.first_name} ${userProfile.last_name}`;
+        } else if (userProfile.full_name) {
+          authorName = userProfile.full_name;
+        } else if (userProfile.email) {
+          authorName = userProfile.email;
         }
       }
 
       const newNoteObj = {
         id: Date.now().toString(),
         content: notes,
-        author: authorName, // Use selected team member's name
+        author: authorName,
+        author_id: user?.id || null, // Store user ID for future reference
         date: new Date().toISOString(),
-        visibleTo: selectedNoteVisibility, // Add visibility tracking
+        visibleTo: selectedNoteVisibility, // Keep visibility tracking
         replies: [],
       };
 
@@ -1311,9 +1332,8 @@ export default function EmployeeProfile() {
       const { error: dbError } = await supabase.from("documents").insert({
         company_id: companyId,
         title: file.name.replace(/\.[^/.]+$/, ""),
-        description: `Document for employee ${employee?.full_name || ""} (${
-          employee?.employee_number || ""
-        })`,
+        description: `Document for employee ${employee?.full_name || ""} (${employee?.employee_number || ""
+          })`,
         category: "other",
         file_name: file.name,
         file_path: filePath,
@@ -1440,14 +1460,14 @@ export default function EmployeeProfile() {
       let gInvestigation = gInvestigations.find(
         (g) => g.id === checkupFormData.investigation_id
       );
-      
+
       // If not found by ID, try finding by name
       if (!gInvestigation) {
         gInvestigation = gInvestigations.find(
           (g) => g.name === checkupFormData.investigation_id
         );
       }
-      
+
       const investigationName = gInvestigation?.name || checkupFormData.investigation_id;
 
       // Note: investigation_id is a foreign key to the investigations table
@@ -1565,8 +1585,7 @@ export default function EmployeeProfile() {
       await logActivity(
         "Updated health check-up",
         "update",
-        `Updated check-up status to ${updates.status}${
-          updates.completion_date ? " and marked as completed" : ""
+        `Updated check-up status to ${updates.status}${updates.completion_date ? " and marked as completed" : ""
         }`,
         { checkupId, updates }
       );
@@ -1774,14 +1793,14 @@ export default function EmployeeProfile() {
       field === "first_name"
         ? firstName
         : field === "last_name"
-        ? lastName
-        : value;
+          ? lastName
+          : value;
     const inputValue =
       field === "first_name"
         ? firstName
         : field === "last_name"
-        ? lastName
-        : (formData[field as keyof EmployeeData] as string) || "";
+          ? lastName
+          : (formData[field as keyof EmployeeData] as string) || "";
 
     return (
       <div className="space-y-2">
@@ -1926,7 +1945,7 @@ export default function EmployeeProfile() {
       today.setHours(0, 0, 0, 0);
       const apptDate = new Date(checkup.appointment_date);
       apptDate.setHours(0, 0, 0, 0);
-      
+
       if (apptDate <= today) {
         return { label: 'Due', variant: 'destructive' as const };
       }
@@ -1946,7 +1965,7 @@ export default function EmployeeProfile() {
               {t("common.back")}
             </Button>
             <div>
-              <h1 className="text-3xl font-bold">{employee.full_name}</h1>
+              <h1 className="text-3xl font-bold">{employee.full_name || "Employee Profile"}</h1>
               <p className="text-muted-foreground">
                 {t("employees.employeeNumber")} #{employee.employee_number}
               </p>
@@ -2064,20 +2083,20 @@ export default function EmployeeProfile() {
                   </span>
                   {employee.tags && employee.tags.length > 0
                     ? employee.tags.map((tag, index) => (
-                        <Badge
-                          key={index}
-                          variant="secondary"
-                          className="px-2 py-1 text-xs"
+                      <Badge
+                        key={index}
+                        variant="secondary"
+                        className="px-2 py-1 text-xs"
+                      >
+                        {tag}
+                        <button
+                          onClick={() => handleRemoveTag(tag)}
+                          className="ml-1.5 hover:text-destructive focus:outline-none"
                         >
-                          {tag}
-                          <button
-                            onClick={() => handleRemoveTag(tag)}
-                            className="ml-1.5 hover:text-destructive focus:outline-none"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </Badge>
-                      ))
+                          <X className="w-3 h-3" />
+                        </button>
+                      </Badge>
+                    ))
                     : null}
                   <div className="flex gap-2 items-center">
                     <Input
@@ -2126,7 +2145,7 @@ export default function EmployeeProfile() {
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-lg">Profile Fields</CardTitle>
-                      
+
                       {/* Add profile field button on the right */}
                       <div className="relative">
                         <Button
@@ -2224,15 +2243,15 @@ export default function EmployeeProfile() {
                               autoFocus
                             />
                           ) : (
-                            <Label 
+                            <Label
                               className="text-sm font-medium cursor-pointer hover:text-primary"
                               onClick={() => setEditingSpecialFieldLabel("languages")}
                             >
                               {languagesLabel}
                             </Label>
                           )}
-                          <Pencil 
-                            className="w-3 h-3 text-muted-foreground cursor-pointer hover:text-primary" 
+                          <Pencil
+                            className="w-3 h-3 text-muted-foreground cursor-pointer hover:text-primary"
                             onClick={() => setEditingSpecialFieldLabel("languages")}
                           />
                         </div>
@@ -2292,15 +2311,15 @@ export default function EmployeeProfile() {
                               autoFocus
                             />
                           ) : (
-                            <Label 
+                            <Label
                               className="text-sm font-medium cursor-pointer hover:text-primary"
                               onClick={() => setEditingSpecialFieldLabel("skills")}
                             >
                               {skillsLabel}
                             </Label>
                           )}
-                          <Pencil 
-                            className="w-3 h-3 text-muted-foreground cursor-pointer hover:text-primary" 
+                          <Pencil
+                            className="w-3 h-3 text-muted-foreground cursor-pointer hover:text-primary"
                             onClick={() => setEditingSpecialFieldLabel("skills")}
                           />
                         </div>
@@ -2358,15 +2377,15 @@ export default function EmployeeProfile() {
                               autoFocus
                             />
                           ) : (
-                            <Label 
+                            <Label
                               className="text-sm font-medium cursor-pointer hover:text-primary"
                               onClick={() => setEditingSpecialFieldLabel("salary")}
                             >
                               {salaryLabel}
                             </Label>
                           )}
-                          <Pencil 
-                            className="w-3 h-3 text-muted-foreground cursor-pointer hover:text-primary" 
+                          <Pencil
+                            className="w-3 h-3 text-muted-foreground cursor-pointer hover:text-primary"
                             onClick={() => setEditingSpecialFieldLabel("salary")}
                           />
                         </div>
@@ -2436,7 +2455,7 @@ export default function EmployeeProfile() {
                                 autoFocus
                               />
                             ) : (
-                              <Label 
+                              <Label
                                 className="text-sm font-medium cursor-pointer hover:text-primary"
                                 onClick={() => {
                                   setEditingCustomFieldLabel(field.id);
@@ -2446,8 +2465,8 @@ export default function EmployeeProfile() {
                                 {field.label}
                               </Label>
                             )}
-                            <Pencil 
-                              className="w-3 h-3 text-muted-foreground cursor-pointer hover:text-primary" 
+                            <Pencil
+                              className="w-3 h-3 text-muted-foreground cursor-pointer hover:text-primary"
                               onClick={() => {
                                 setEditingCustomFieldLabel(field.id);
                                 setCustomFieldLabelEditValue(field.label);
@@ -2462,7 +2481,7 @@ export default function EmployeeProfile() {
                               <Trash2 className="w-3 h-3 text-destructive" />
                             </Button>
                           </div>
-                          
+
                           {/* Editable value section */}
                           {editingCustomField === field.id ? (
                             <div className="space-y-2">
@@ -2521,7 +2540,7 @@ export default function EmployeeProfile() {
                                   autoFocus
                                 />
                               )}
-                              
+
                               <div className="flex gap-2">
                                 <Button
                                   size="sm"
@@ -2556,7 +2575,7 @@ export default function EmployeeProfile() {
                                 setCustomFieldEditValue(field.value || "");
                               }}
                             >
-                              {field.type === "Yes/No" 
+                              {field.type === "Yes/No"
                                 ? (field.value ? "Yes" : "No")
                                 : (field.value || `No ${field.label.toLowerCase()} specified`)
                               }
@@ -2714,13 +2733,12 @@ export default function EmployeeProfile() {
                               <SelectValue>
                                 <span className="flex items-center gap-1">
                                   <span
-                                    className={`w-2 h-2 rounded-full ${
-                                      newTaskPriority === "high"
-                                        ? "bg-red-500"
-                                        : newTaskPriority === "medium"
+                                    className={`w-2 h-2 rounded-full ${newTaskPriority === "high"
+                                      ? "bg-red-500"
+                                      : newTaskPriority === "medium"
                                         ? "bg-yellow-500"
                                         : "bg-green-500"
-                                    }`}
+                                      }`}
                                   />
                                   PR
                                 </span>
@@ -2747,10 +2765,10 @@ export default function EmployeeProfile() {
                               </SelectItem>
                             </SelectContent>
                           </Select>
-                          
+
                           {/* @ button */}
-                          <Button 
-                            variant="outline" 
+                          <Button
+                            variant="outline"
                             size="sm"
                             onClick={() => setShowTaskMentionDropdown(!showTaskMentionDropdown)}
                           >
@@ -2843,8 +2861,8 @@ export default function EmployeeProfile() {
                                             task.priority === "high"
                                               ? "destructive"
                                               : task.priority === "medium"
-                                              ? "default"
-                                              : "secondary"
+                                                ? "default"
+                                                : "secondary"
                                           }
                                           className="text-[10px] px-1 py-0"
                                         >
@@ -2984,8 +3002,8 @@ export default function EmployeeProfile() {
                               </SelectTrigger>
                               <SelectContent>
                                 {teamMembers.map((member) => (
-                                  <SelectItem 
-                                    key={member.id} 
+                                  <SelectItem
+                                    key={member.id}
                                     value={member.id}
                                   >
                                     {member.first_name} {member.last_name} ({member.role || "User"})
@@ -3005,7 +3023,7 @@ export default function EmployeeProfile() {
                           >
                             Cancel
                           </Button>
-                         
+
                           <Button
                             onClick={handleSaveNotes}
                             size="sm"
@@ -3023,8 +3041,8 @@ export default function EmployeeProfile() {
                             try {
                               const parsedNotes =
                                 employee?.notes &&
-                                (employee.notes.startsWith("[") ||
-                                  employee.notes.startsWith("{"))
+                                  (employee.notes.startsWith("[") ||
+                                    employee.notes.startsWith("{"))
                                   ? JSON.parse(employee.notes)
                                   : null;
 
@@ -3051,13 +3069,13 @@ export default function EmployeeProfile() {
                                           <span className="text-[10px] text-muted-foreground">
                                             {note.date
                                               ? new Date(
-                                                  note.date
-                                                ).toLocaleString("en-US", {
-                                                  month: "short",
-                                                  day: "numeric",
-                                                  hour: "2-digit",
-                                                  minute: "2-digit",
-                                                })
+                                                note.date
+                                              ).toLocaleString("en-US", {
+                                                month: "short",
+                                                day: "numeric",
+                                                hour: "2-digit",
+                                                minute: "2-digit",
+                                              })
                                               : ""}
                                           </span>
                                         </div>
@@ -3088,7 +3106,7 @@ export default function EmployeeProfile() {
                                           <ThumbsUp className="w-3 h-3 mr-1" />
                                           Like
                                         </Button>
-                                       
+
                                         <Button
                                           variant="ghost"
                                           size="sm"
@@ -3100,11 +3118,11 @@ export default function EmployeeProfile() {
                                               const mentionRegex = /@([a-z]+\s+[a-z]+)/gi;
                                               const mentions: string[] = [];
                                               let match;
-                                              
+
                                               while ((match = mentionRegex.exec(note.content)) !== null) {
                                                 mentions.push(match[1].trim());
                                               }
-                                              
+
                                               console.log("Extracted mentions:", mentions);
 
                                               if (mentions.length === 0) {
@@ -3283,201 +3301,199 @@ export default function EmployeeProfile() {
                       const today = new Date();
                       const dueDate = checkup.due_date ? new Date(checkup.due_date) : null;
                       const isOverdue = dueDate && today > dueDate && (checkup.status === 'open' || checkup.status === 'planned');
-                      
+
                       return (
-                      <Card key={checkup.id} className={`p-4 border rounded-lg space-y-3 ${
-                        (() => {
+                        <Card key={checkup.id} className={`p-4 border rounded-lg space-y-3 ${(() => {
                           if (checkup.status === 'done') return 'bg-green-50 border-green-200';
                           if (isOverdue) return 'bg-red-50 border-red-200';
                           if (checkup.status === 'planned' || checkup.status === 'open') return 'bg-blue-50 border-blue-200';
                           return 'bg-gray-50 border-gray-200';
                         })()
-                      }`}>
-                        {/* Investigation Name */}
-                        <h3 className="font-semibold text-base">
-                          {(() => {
-                            // Check if investigation_name looks like a UUID (contains hyphens and is long)
-                            const isUUID = checkup.investigation_name?.includes('-') && checkup.investigation_name?.length > 30;
-                            
-                            // If it's a UUID or empty, look up from gInvestigations using investigation_id
-                            if (!checkup.investigation_name || isUUID) {
-                              const investigation = gInvestigations.find(
-                                (g) => g.id === checkup.investigation_id
-                              );
-                              return investigation?.name || "Investigation";
-                            }
-                            
-                            // Otherwise use the stored investigation_name
-                            return checkup.investigation_name;
-                          })()}
-                        </h3>
-                        
-                        {/* Due Date - When investigation expires (no special styling) */}
-                        <div className="text-sm text-muted-foreground">
-                          <span className="font-medium">
-                            Due Date: {checkup.due_date 
-                              ? new Date(checkup.due_date).toLocaleDateString('de-DE')
-                              : 'Not calculated yet'}
-                          </span>
-                        </div>
-                        
-                        {/* Status Badge - Automatic, Read-only */}
-                        <div className="flex items-center gap-2">
-                          
-                          
-                          {/* Manual Status Override */}
-                          <Select
-                            value={checkup.status}
-                            onValueChange={(value) =>
-                              handleUpdateCheckup(checkup.id, {
-                                status: value,
-                              })
-                            }
-                          >
-                            <SelectTrigger 
-                              className={`w-32 h-8 ${
-                                checkup.status === 'done' 
-                                  ? 'bg-green-100 text-green-800 border-green-300' 
-                                  : isOverdue
-                                  ? 'bg-red-100 text-red-800 border-red-300'
-                                  : (checkup.status === 'open' || checkup.status === 'planned')
-                                  ? 'bg-blue-100 text-blue-800 border-blue-300' 
-                                  : ''
-                              }`}
+                          }`}>
+                          {/* Investigation Name */}
+                          <h3 className="font-semibold text-base">
+                            {(() => {
+                              // Check if investigation_name looks like a UUID (contains hyphens and is long)
+                              const isUUID = checkup.investigation_name?.includes('-') && checkup.investigation_name?.length > 30;
+
+                              // If it's a UUID or empty, look up from gInvestigations using investigation_id
+                              if (!checkup.investigation_name || isUUID) {
+                                const investigation = gInvestigations.find(
+                                  (g) => g.id === checkup.investigation_id
+                                );
+                                return investigation?.name || "Investigation";
+                              }
+
+                              // Otherwise use the stored investigation_name
+                              return checkup.investigation_name;
+                            })()}
+                          </h3>
+
+                          {/* Due Date - When investigation expires (no special styling) */}
+                          <div className="text-sm text-muted-foreground">
+                            <span className="font-medium">
+                              Due Date: {checkup.due_date
+                                ? new Date(checkup.due_date).toLocaleDateString('de-DE')
+                                : 'Not calculated yet'}
+                            </span>
+                          </div>
+
+                          {/* Status Badge - Automatic, Read-only */}
+                          <div className="flex items-center gap-2">
+
+
+                            {/* Manual Status Override */}
+                            <Select
+                              value={checkup.status}
+                              onValueChange={(value) =>
+                                handleUpdateCheckup(checkup.id, {
+                                  status: value,
+                                })
+                              }
                             >
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="planned">Planned</SelectItem>
-                              <SelectItem value="open">Open</SelectItem>
-                              <SelectItem value="done">Done</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        
-                        {/* Appointment Info (only show if set) */}
-                        {checkup.appointment_date && (
-                          <p className="text-sm text-muted-foreground">
-                            Appointment: {new Date(checkup.appointment_date).toLocaleDateString('de-DE')}
-                          </p>
-                        )}
-                        
-                        {/* Notes (if any) */}
-                        {checkup.notes && (
-                          <p className="text-xs text-muted-foreground italic">
-                            {checkup.notes}
-                          </p>
-                        )}
-                        
-                        {/* Action Buttons */}
-                        <div className="flex gap-2 flex-wrap pt-2">
-                          <Button
-                            variant="default"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedCheckupForAppointment(checkup);
-                              setAppointmentDate(checkup.appointment_date ? new Date(checkup.appointment_date) : undefined);
-                              setIsAppointmentDialogOpen(true);
-                            }}
-                            className="text-xs"
-                          >
-                            <CalendarIcon className="w-3 h-3 mr-1" />
-                            Set Appointment
-                          </Button>
-                          
-                          <Button
-                            variant="default"
-                            size="sm"
-                            onClick={() => {
-                              const completionDate = new Date().toISOString().split('T')[0];
-                              // Calculate due date as 3 years from completion
-                              const dueDate = new Date();
-                              dueDate.setFullYear(dueDate.getFullYear() + 3);
-                              const dueDateString = dueDate.toISOString().split('T')[0];
-                              
-                              handleUpdateCheckup(checkup.id, {
-                                status: 'done',
-                                completion_date: completionDate,
-                                due_date: dueDateString,
-                              });
-                            }}
-                            disabled={checkup.status === 'done' || !!checkup.completion_date}
-                            className="text-xs"
-                          >
-                            <CheckCircle className="w-3 h-3 mr-1" />
-                            Complete
-                          </Button>
-                          
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => handleDeleteCheckup(checkup.id)}
-                            className="text-xs"
-                          >
-                            <Trash2 className="w-3 h-3 mr-1" />
-                            Delete
-                          </Button>
-                          
-                          {/* Upload Document Button */}
-                          <div>
-                            <input
-                              type="file"
-                              id={`doc-upload-${checkup.id}`}
-                              className="hidden"
-                              onChange={(e) => handleCheckupDocumentUpload(e, checkup.id)}
-                              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                            />
+                              <SelectTrigger
+                                className={`w-32 h-8 ${checkup.status === 'done'
+                                  ? 'bg-green-100 text-green-800 border-green-300'
+                                  : isOverdue
+                                    ? 'bg-red-100 text-red-800 border-red-300'
+                                    : (checkup.status === 'open' || checkup.status === 'planned')
+                                      ? 'bg-blue-100 text-blue-800 border-blue-300'
+                                      : ''
+                                  }`}
+                              >
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="planned">Planned</SelectItem>
+                                <SelectItem value="open">Open</SelectItem>
+                                <SelectItem value="done">Done</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          {/* Appointment Info (only show if set) */}
+                          {checkup.appointment_date && (
+                            <p className="text-sm text-muted-foreground">
+                              Appointment: {new Date(checkup.appointment_date).toLocaleDateString('de-DE')}
+                            </p>
+                          )}
+
+                          {/* Notes (if any) */}
+                          {checkup.notes && (
+                            <p className="text-xs text-muted-foreground italic">
+                              {checkup.notes}
+                            </p>
+                          )}
+
+                          {/* Action Buttons */}
+                          <div className="flex gap-2 flex-wrap pt-2">
                             <Button
-                              variant="outline"
+                              variant="default"
                               size="sm"
-                              onClick={() => document.getElementById(`doc-upload-${checkup.id}`)?.click()}
-                              disabled={uploadingDocument === checkup.id}
+                              onClick={() => {
+                                setSelectedCheckupForAppointment(checkup);
+                                setAppointmentDate(checkup.appointment_date ? new Date(checkup.appointment_date) : undefined);
+                                setIsAppointmentDialogOpen(true);
+                              }}
                               className="text-xs"
                             >
-                              <Upload className="w-3 h-3 mr-1" />
-                              {uploadingDocument === checkup.id ? 'Uploading...' : 'Upload Document'}
+                              <CalendarIcon className="w-3 h-3 mr-1" />
+                              Set Appointment
                             </Button>
-                          </div>
-                        </div>
-                        
-                        {/* Documents List */}
-                        {checkupDocuments[checkup.id] && checkupDocuments[checkup.id].length > 0 && (
-                          <div className="mt-3 pt-3 border-t">
-                            <p className="text-xs font-medium mb-2">Attached Documents:</p>
-                            <div className="space-y-1">
-                              {checkupDocuments[checkup.id].map((doc: any) => (
-                                <div key={doc.id} className="flex items-center justify-between bg-muted/50 rounded px-2 py-1">
-                                  <div className="flex items-center gap-1 text-xs flex-1">
-                                    <FileText className="w-3 h-3 text-blue-600" />
-                                    <span className="truncate">{doc.file_name}</span>
-                                  </div>
-                                  <div className="flex items-center gap-1">
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => handlePreviewCheckupDocument(doc.file_path)}
-                                      className="h-6 w-6 p-0"
-                                      title="Preview document"
-                                    >
-                                      <Eye className="w-3 h-3 text-blue-600" />
-                                    </Button>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => handleDeleteCheckupDocument(doc.id, doc.file_path)}
-                                      className="h-6 w-6 p-0"
-                                      title="Delete document"
-                                    >
-                                      <Trash2 className="w-3 h-3 text-red-600" />
-                                    </Button>
-                                  </div>
-                                </div>
-                              ))}
+
+                            <Button
+                              variant="default"
+                              size="sm"
+                              onClick={() => {
+                                const completionDate = new Date().toISOString().split('T')[0];
+                                // Calculate due date as 3 years from completion
+                                const dueDate = new Date();
+                                dueDate.setFullYear(dueDate.getFullYear() + 3);
+                                const dueDateString = dueDate.toISOString().split('T')[0];
+
+                                handleUpdateCheckup(checkup.id, {
+                                  status: 'done',
+                                  completion_date: completionDate,
+                                  due_date: dueDateString,
+                                });
+                              }}
+                              disabled={checkup.status === 'done'}
+                              className="text-xs"
+                            >
+                              <CheckCircle className="w-3 h-3 mr-1" />
+                              Complete
+                            </Button>
+
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleDeleteCheckup(checkup.id)}
+                              className="text-xs"
+                            >
+                              <Trash2 className="w-3 h-3 mr-1" />
+                              Delete
+                            </Button>
+
+                            {/* Upload Document Button */}
+                            <div>
+                              <input
+                                type="file"
+                                id={`doc-upload-${checkup.id}`}
+                                className="hidden"
+                                onChange={(e) => handleCheckupDocumentUpload(e, checkup.id)}
+                                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                              />
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => document.getElementById(`doc-upload-${checkup.id}`)?.click()}
+                                disabled={uploadingDocument === checkup.id}
+                                className="text-xs"
+                              >
+                                <Upload className="w-3 h-3 mr-1" />
+                                {uploadingDocument === checkup.id ? 'Uploading...' : 'Upload Document'}
+                              </Button>
                             </div>
                           </div>
-                        )}
-                      </Card>
-                    );
+
+                          {/* Documents List */}
+                          {checkupDocuments[checkup.id] && checkupDocuments[checkup.id].length > 0 && (
+                            <div className="mt-3 pt-3 border-t">
+                              <p className="text-xs font-medium mb-2">Attached Documents:</p>
+                              <div className="space-y-1">
+                                {checkupDocuments[checkup.id].map((doc: any) => (
+                                  <div key={doc.id} className="flex items-center justify-between bg-muted/50 rounded px-2 py-1">
+                                    <div className="flex items-center gap-1 text-xs flex-1">
+                                      <FileText className="w-3 h-3 text-blue-600" />
+                                      <span className="truncate">{doc.file_name}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handlePreviewCheckupDocument(doc.file_path)}
+                                        className="h-6 w-6 p-0"
+                                        title="Preview document"
+                                      >
+                                        <Eye className="w-3 h-3 text-blue-600" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleDeleteCheckupDocument(doc.id, doc.file_path)}
+                                        className="h-6 w-6 p-0"
+                                        title="Delete document"
+                                      >
+                                        <Trash2 className="w-3 h-3 text-red-600" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </Card>
+                      );
                     })}
                   </div>
                 )}
@@ -3565,7 +3581,7 @@ export default function EmployeeProfile() {
                         }
                       />
                     </div>
-                    
+
                     <div>
                       <Label>Due Date</Label>
                       <Input
@@ -3730,11 +3746,10 @@ export default function EmployeeProfile() {
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
-                  className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-                    isDragging
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:border-primary/50"
-                  }`}
+                  className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${isDragging
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:border-primary/50"
+                    }`}
                 >
                   <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                   <p className="text-lg font-medium mb-2">

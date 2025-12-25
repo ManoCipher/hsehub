@@ -604,34 +604,34 @@ export default function Reports() {
 
 // Section Components
 
-// Default layout for the dashboard grid
+// Default layout for the dashboard grid - optimized for visual appeal
 const defaultLayouts = {
   lg: [
-    { i: "risk-assessments", x: 0, y: 0, w: 3, h: 2, minW: 2, minH: 2, static: false },
-    { i: "safety-audits", x: 3, y: 0, w: 3, h: 2, minW: 2, minH: 2, static: false },
-    { i: "incidents", x: 6, y: 0, w: 3, h: 2, minW: 2, minH: 2, static: false },
-    { i: "training-compliance", x: 9, y: 0, w: 3, h: 2, minW: 2, minH: 2, static: false },
-    { i: "incident-trends", x: 0, y: 2, w: 12, h: 5, minW: 6, minH: 4, static: false },
-    { i: "audit-completion", x: 0, y: 7, w: 6, h: 4, minW: 4, minH: 3, static: false },
-    { i: "task-completion", x: 6, y: 7, w: 6, h: 4, minW: 4, minH: 3, static: false },
+    { i: "risk-assessments", x: 0, y: 0, w: 3, h: 2.5, minW: 2, minH: 2, static: false },
+    { i: "safety-audits", x: 3, y: 0, w: 3, h: 2.5, minW: 2, minH: 2, static: false },
+    { i: "incidents", x: 6, y: 0, w: 3, h: 2.5, minW: 2, minH: 2, static: false },
+    { i: "training-compliance", x: 9, y: 0, w: 3, h: 2.5, minW: 2, minH: 2, static: false },
+    { i: "incident-trends", x: 0, y: 2.5, w: 8, h: 5, minW: 6, minH: 4, static: false },
+    { i: "audit-completion", x: 8, y: 2.5, w: 4, h: 5, minW: 3, minH: 4, static: false },
+    { i: "task-completion", x: 0, y: 7.5, w: 6, h: 4, minW: 4, minH: 3, static: false },
   ],
   md: [
-    { i: "risk-assessments", x: 0, y: 0, w: 5, h: 2, minW: 3, minH: 2, static: false },
-    { i: "safety-audits", x: 5, y: 0, w: 5, h: 2, minW: 3, minH: 2, static: false },
-    { i: "incidents", x: 0, y: 2, w: 5, h: 2, minW: 3, minH: 2, static: false },
-    { i: "training-compliance", x: 5, y: 2, w: 5, h: 2, minW: 3, minH: 2, static: false },
-    { i: "incident-trends", x: 0, y: 4, w: 10, h: 5, minW: 6, minH: 4, static: false },
-    { i: "audit-completion", x: 0, y: 9, w: 5, h: 4, minW: 4, minH: 3, static: false },
-    { i: "task-completion", x: 5, y: 9, w: 5, h: 4, minW: 4, minH: 3, static: false },
+    { i: "risk-assessments", x: 0, y: 0, w: 5, h: 2.5, minW: 3, minH: 2, static: false },
+    { i: "safety-audits", x: 5, y: 0, w: 5, h: 2.5, minW: 3, minH: 2, static: false },
+    { i: "incidents", x: 0, y: 2.5, w: 5, h: 2.5, minW: 3, minH: 2, static: false },
+    { i: "training-compliance", x: 5, y: 2.5, w: 5, h: 2.5, minW: 3, minH: 2, static: false },
+    { i: "incident-trends", x: 0, y: 5, w: 10, h: 5, minW: 6, minH: 4, static: false },
+    { i: "audit-completion", x: 0, y: 10, w: 5, h: 4, minW: 4, minH: 3, static: false },
+    { i: "task-completion", x: 5, y: 10, w: 5, h: 4, minW: 4, minH: 3, static: false },
   ],
   sm: [
-    { i: "risk-assessments", x: 0, y: 0, w: 6, h: 2, minW: 3, minH: 2, static: false },
-    { i: "safety-audits", x: 0, y: 2, w: 6, h: 2, minW: 3, minH: 2, static: false },
-    { i: "incidents", x: 0, y: 4, w: 6, h: 2, minW: 3, minH: 2, static: false },
-    { i: "training-compliance", x: 0, y: 6, w: 6, h: 2, minW: 3, minH: 2, static: false },
-    { i: "incident-trends", x: 0, y: 8, w: 6, h: 5, minW: 4, minH: 4, static: false },
-    { i: "audit-completion", x: 0, y: 13, w: 6, h: 4, minW: 3, minH: 3, static: false },
-    { i: "task-completion", x: 0, y: 17, w: 6, h: 4, minW: 3, minH: 3, static: false },
+    { i: "risk-assessments", x: 0, y: 0, w: 6, h: 2.5, minW: 3, minH: 2, static: false },
+    { i: "safety-audits", x: 0, y: 2.5, w: 6, h: 2.5, minW: 3, minH: 2, static: false },
+    { i: "incidents", x: 0, y: 5, w: 6, h: 2.5, minW: 3, minH: 2, static: false },
+    { i: "training-compliance", x: 0, y: 7.5, w: 6, h: 2.5, minW: 3, minH: 2, static: false },
+    { i: "incident-trends", x: 0, y: 10, w: 6, h: 5, minW: 4, minH: 4, static: false },
+    { i: "audit-completion", x: 0, y: 15, w: 6, h: 4, minW: 3, minH: 3, static: false },
+    { i: "task-completion", x: 0, y: 19, w: 6, h: 4, minW: 3, minH: 3, static: false },
   ],
 };
 
@@ -754,12 +754,12 @@ function OverviewSection({
         layouts={layouts}
         breakpoints={{ lg: 1200, md: 996, sm: 768 }}
         cols={{ lg: 12, md: 10, sm: 6 }}
-        rowHeight={70}
+        rowHeight={85}
         onLayoutChange={handleLayoutChange}
         draggableHandle=".drag-handle"
         isResizable={true}
         isDraggable={true}
-        margin={[20, 20]}
+        margin={[18, 18]}
         containerPadding={[0, 0]}
         compactType="vertical"
       >
@@ -961,7 +961,7 @@ function OverviewSection({
             layouts={customReportsLayouts}
             breakpoints={{ lg: 1200, md: 996, sm: 768 }}
             cols={{ lg: 12, md: 10, sm: 6 }}
-            rowHeight={70}
+            rowHeight={80}
             onLayoutChange={(currentLayout: any[], allLayouts: { [key: string]: any[] }) => {
               setCustomReportsLayouts(allLayouts);
               try {
@@ -973,7 +973,7 @@ function OverviewSection({
             draggableHandle=".drag-handle"
             isResizable={true}
             isDraggable={true}
-            margin={[20, 20]}
+            margin={[16, 16]}
             containerPadding={[0, 0]}
             compactType="vertical"
           >
@@ -1082,12 +1082,12 @@ function DraggableGridSection({
         layouts={layoutsWithLocks}
         breakpoints={{ lg: 1200, md: 996, sm: 768 }}
         cols={{ lg: 12, md: 10, sm: 6 }}
-        rowHeight={70}
+        rowHeight={85}
         onLayoutChange={handleLayoutChange}
         draggableHandle=".drag-handle"
         isResizable={true}
         isDraggable={true}
-        margin={[20, 20]}
+        margin={[18, 18]}
         containerPadding={[0, 0]}
         compactType="vertical"
       >
@@ -1120,9 +1120,9 @@ function EnhancedDraggableCard({
   onToggleLock?: () => void;
 }) {
   return (
-    <Card className="dashboard-grid-card border hover:border-primary/50 transition-all shadow-sm hover:shadow-md">
-      <div className="drag-handle border-b flex items-center justify-between px-3">
-        <GripVertical className={`w-4 h-4 ${handleColor} ${isLocked ? 'opacity-30' : ''}`} />
+    <Card className="dashboard-grid-card border hover:border-primary/50 transition-all shadow-sm hover:shadow-md h-full flex flex-col">
+      <div className="drag-handle border-b flex items-center justify-between px-2 py-1.5 flex-shrink-0">
+        <GripVertical className={`w-3.5 h-3.5 ${handleColor} ${isLocked ? 'opacity-30' : ''}`} />
         {onToggleLock && (
           <button
             onClick={(e) => {
@@ -1140,13 +1140,15 @@ function EnhancedDraggableCard({
           </button>
         )}
       </div>
-      <CardContent className="p-6 flex-1 flex flex-col justify-center group">
-        <div className={`w-12 h-12 rounded-lg ${color} flex items-center justify-center mb-4 transition-transform group-hover:scale-110`}>
-          {icon}
+      <CardContent className="flex-1 flex flex-col justify-center items-center p-4 min-h-0 group">
+        <div className={`rounded-lg ${color} flex items-center justify-center mb-2 transition-transform group-hover:scale-105`} style={{ width: 'clamp(32px, 15%, 48px)', height: 'clamp(32px, 15%, 48px)' }}>
+          <div className="w-4 h-4" style={{ transform: 'scale(clamp(0.8, 1, 1.2))' }}>
+            {icon}
+          </div>
         </div>
-        <h3 className="text-sm font-medium text-muted-foreground mb-1">{title}</h3>
-        <p className="text-xs text-muted-foreground mb-3">{subtitle}</p>
-        <p className="text-3xl font-bold">{value}</p>
+        <h3 className="font-medium text-muted-foreground mb-0.5 text-center" style={{ fontSize: 'clamp(0.75rem, 2.5vw, 0.875rem)' }}>{title}</h3>
+        <p className="text-muted-foreground mb-2 text-center" style={{ fontSize: 'clamp(0.65rem, 2vw, 0.75rem)' }}>{subtitle}</p>
+        <p className="font-bold text-center" style={{ fontSize: 'clamp(1.25rem, 5vw, 2rem)', lineHeight: '1.2' }}>{value}</p>
       </CardContent>
     </Card>
   );
@@ -1167,17 +1169,19 @@ function DraggableCard({
   color: string;
 }) {
   return (
-    <Card className="dashboard-grid-card border hover:border-primary/50 transition-colors shadow-sm">
-      <div className="drag-handle border-b">
-        <GripVertical className="w-4 h-4 text-muted-foreground" />
+    <Card className="dashboard-grid-card border hover:border-primary/50 transition-colors shadow-sm h-full flex flex-col">
+      <div className="drag-handle border-b flex items-center justify-center px-2 py-1.5 flex-shrink-0">
+        <GripVertical className="w-3.5 h-3.5 text-muted-foreground" />
       </div>
-      <CardContent className="p-6 flex-1 flex flex-col justify-center">
-        <div className={`w-12 h-12 rounded-lg ${color} flex items-center justify-center mb-4`}>
-          {icon}
+      <CardContent className="flex-1 flex flex-col justify-center items-center p-4 min-h-0">
+        <div className={`rounded-lg ${color} flex items-center justify-center mb-2`} style={{ width: 'clamp(32px, 15%, 48px)', height: 'clamp(32px, 15%, 48px)' }}>
+          <div className="w-4 h-4">
+            {icon}
+          </div>
         </div>
-        <h3 className="text-sm font-medium text-muted-foreground mb-1">{title}</h3>
-        <p className="text-xs text-muted-foreground mb-3">{subtitle}</p>
-        <p className="text-3xl font-bold">{value}</p>
+        <h3 className="font-medium text-muted-foreground mb-0.5 text-center" style={{ fontSize: 'clamp(0.75rem, 2.5vw, 0.875rem)' }}>{title}</h3>
+        <p className="text-muted-foreground mb-2 text-center" style={{ fontSize: 'clamp(0.65rem, 2vw, 0.75rem)' }}>{subtitle}</p>
+        <p className="font-bold text-center" style={{ fontSize: 'clamp(1.25rem, 5vw, 2rem)', lineHeight: '1.2' }}>{value}</p>
       </CardContent>
     </Card>
   );

@@ -607,31 +607,31 @@ export default function Reports() {
 // Default layout for the dashboard grid
 const defaultLayouts = {
   lg: [
-    { i: "risk-assessments", x: 0, y: 0, w: 3, h: 3, minW: 2, minH: 3, static: false },
-    { i: "safety-audits", x: 3, y: 0, w: 3, h: 3, minW: 2, minH: 3, static: false },
-    { i: "incidents", x: 6, y: 0, w: 3, h: 3, minW: 2, minH: 3, static: false },
-    { i: "training-compliance", x: 9, y: 0, w: 3, h: 3, minW: 2, minH: 3, static: false },
-    { i: "incident-trends", x: 0, y: 3, w: 12, h: 6, minW: 6, minH: 5, static: false },
-    { i: "audit-completion", x: 0, y: 9, w: 6, h: 5, minW: 4, minH: 4, static: false },
-    { i: "task-completion", x: 6, y: 9, w: 6, h: 5, minW: 4, minH: 4, static: false },
+    { i: "risk-assessments", x: 0, y: 0, w: 3, h: 2, minW: 2, minH: 2, static: false },
+    { i: "safety-audits", x: 3, y: 0, w: 3, h: 2, minW: 2, minH: 2, static: false },
+    { i: "incidents", x: 6, y: 0, w: 3, h: 2, minW: 2, minH: 2, static: false },
+    { i: "training-compliance", x: 9, y: 0, w: 3, h: 2, minW: 2, minH: 2, static: false },
+    { i: "incident-trends", x: 0, y: 2, w: 12, h: 5, minW: 6, minH: 4, static: false },
+    { i: "audit-completion", x: 0, y: 7, w: 6, h: 4, minW: 4, minH: 3, static: false },
+    { i: "task-completion", x: 6, y: 7, w: 6, h: 4, minW: 4, minH: 3, static: false },
   ],
   md: [
-    { i: "risk-assessments", x: 0, y: 0, w: 5, h: 3, minW: 3, minH: 3, static: false },
-    { i: "safety-audits", x: 5, y: 0, w: 5, h: 3, minW: 3, minH: 3, static: false },
-    { i: "incidents", x: 0, y: 3, w: 5, h: 3, minW: 3, minH: 3, static: false },
-    { i: "training-compliance", x: 5, y: 3, w: 5, h: 3, minW: 3, minH: 3, static: false },
-    { i: "incident-trends", x: 0, y: 6, w: 10, h: 6, minW: 6, minH: 5, static: false },
-    { i: "audit-completion", x: 0, y: 12, w: 5, h: 5, minW: 4, minH: 4, static: false },
-    { i: "task-completion", x: 5, y: 12, w: 5, h: 5, minW: 4, minH: 4, static: false },
+    { i: "risk-assessments", x: 0, y: 0, w: 5, h: 2, minW: 3, minH: 2, static: false },
+    { i: "safety-audits", x: 5, y: 0, w: 5, h: 2, minW: 3, minH: 2, static: false },
+    { i: "incidents", x: 0, y: 2, w: 5, h: 2, minW: 3, minH: 2, static: false },
+    { i: "training-compliance", x: 5, y: 2, w: 5, h: 2, minW: 3, minH: 2, static: false },
+    { i: "incident-trends", x: 0, y: 4, w: 10, h: 5, minW: 6, minH: 4, static: false },
+    { i: "audit-completion", x: 0, y: 9, w: 5, h: 4, minW: 4, minH: 3, static: false },
+    { i: "task-completion", x: 5, y: 9, w: 5, h: 4, minW: 4, minH: 3, static: false },
   ],
   sm: [
-    { i: "risk-assessments", x: 0, y: 0, w: 6, h: 3, minW: 3, minH: 3, static: false },
-    { i: "safety-audits", x: 0, y: 3, w: 6, h: 3, minW: 3, minH: 3, static: false },
-    { i: "incidents", x: 0, y: 6, w: 6, h: 3, minW: 3, minH: 3, static: false },
-    { i: "training-compliance", x: 0, y: 9, w: 6, h: 3, minW: 3, minH: 3, static: false },
-    { i: "incident-trends", x: 0, y: 12, w: 6, h: 6, minW: 4, minH: 5, static: false },
-    { i: "audit-completion", x: 0, y: 18, w: 6, h: 5, minW: 3, minH: 4, static: false },
-    { i: "task-completion", x: 0, y: 23, w: 6, h: 5, minW: 3, minH: 4, static: false },
+    { i: "risk-assessments", x: 0, y: 0, w: 6, h: 2, minW: 3, minH: 2, static: false },
+    { i: "safety-audits", x: 0, y: 2, w: 6, h: 2, minW: 3, minH: 2, static: false },
+    { i: "incidents", x: 0, y: 4, w: 6, h: 2, minW: 3, minH: 2, static: false },
+    { i: "training-compliance", x: 0, y: 6, w: 6, h: 2, minW: 3, minH: 2, static: false },
+    { i: "incident-trends", x: 0, y: 8, w: 6, h: 5, minW: 4, minH: 4, static: false },
+    { i: "audit-completion", x: 0, y: 13, w: 6, h: 4, minW: 3, minH: 3, static: false },
+    { i: "task-completion", x: 0, y: 17, w: 6, h: 4, minW: 3, minH: 3, static: false },
   ],
 };
 
@@ -1211,85 +1211,137 @@ function KPICard({
   );
 }
 
-// Placeholder sections - will implement in next steps
+// Risk Assessments Section with Resizable Grid
 function RiskAssessmentsSection({ stats, chartData }: { stats: ReportStats; chartData: any[] }) {
+  const defaultLayout = [
+    { i: "total-gbu", x: 0, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
+  ];
+
   return (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-2xl font-bold mb-2">Risk Assessments</h2>
-        <p className="text-muted-foreground">GBU and hazard analysis</p>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <KPICard
-          title="Total GBU"
-          subtitle="Risk assessments"
-          value={stats.totalRiskAssessments}
-          icon={<Shield className="w-5 h-5" />}
-          color="bg-orange-50 text-orange-600"
-        />
-      </div>
-    </div>
+    <DraggableGridSection
+      sectionId="risk-assessments"
+      title="Risk Assessments"
+      description="GBU and hazard analysis. Drag cards to reposition, drag corners to resize."
+      defaultLayout={defaultLayout}
+    >
+      {(lockStates, toggleLock) => (
+        <div key="total-gbu">
+          <EnhancedDraggableCard
+            id="total-gbu"
+            title="Total GBU"
+            subtitle="Risk assessments"
+            value={stats.totalRiskAssessments}
+            icon={<Shield className="w-5 h-5" />}
+            color="bg-orange-50 text-orange-600"
+            isLocked={lockStates["total-gbu"]}
+            onToggleLock={() => toggleLock("total-gbu")}
+          />
+        </div>
+      )}
+    </DraggableGridSection>
   );
 }
 
 function AuditsSection({ stats, chartData }: { stats: ReportStats; chartData: any[] }) {
+  const defaultLayout = [
+    { i: "total-audits", x: 0, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
+    { i: "completed-audits", x: 3, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
+  ];
+
   return (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-2xl font-bold mb-2">Safety Audits</h2>
-        <p className="text-muted-foreground">Audit completion and compliance</p>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <KPICard
-          title="Total Audits"
-          subtitle="All audits"
-          value={stats.totalAudits}
-          icon={<ClipboardCheck className="w-5 h-5" />}
-          color="bg-blue-50 text-blue-600"
-        />
-        <KPICard
-          title="Completed"
-          subtitle="Finished audits"
-          value={stats.completedAudits}
-          icon={<CheckCircle className="w-5 h-5" />}
-          color="bg-green-50 text-green-600"
-        />
-      </div>
-    </div>
+    <DraggableGridSection
+      sectionId="audits"
+      title="Safety Audits"
+      description="Audit completion and compliance. Drag cards to reposition, drag corners to resize."
+      defaultLayout={defaultLayout}
+    >
+      {(lockStates, toggleLock) => (
+        <>
+          <div key="total-audits">
+            <EnhancedDraggableCard
+              id="total-audits"
+              title="Total Audits"
+              subtitle="All audits"
+              value={stats.totalAudits}
+              icon={<ClipboardCheck className="w-5 h-5" />}
+              color="bg-blue-50 text-blue-600"
+              isLocked={lockStates["total-audits"]}
+              onToggleLock={() => toggleLock("total-audits")}
+            />
+          </div>
+          <div key="completed-audits">
+            <EnhancedDraggableCard
+              id="completed-audits"
+              title="Completed"
+              subtitle="Finished audits"
+              value={stats.completedAudits}
+              icon={<CheckCircle className="w-5 h-5" />}
+              color="bg-green-50 text-green-600"
+              isLocked={lockStates["completed-audits"]}
+              onToggleLock={() => toggleLock("completed-audits")}
+            />
+          </div>
+        </>
+      )}
+    </DraggableGridSection>
   );
 }
 
 function IncidentsSection({ stats, chartData }: { stats: ReportStats; chartData: any[] }) {
+  const defaultLayout = [
+    { i: "total-incidents", x: 0, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
+    { i: "open-incidents", x: 3, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
+    { i: "closed-incidents", x: 6, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
+  ];
+
   return (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-2xl font-bold mb-2">Incidents</h2>
-        <p className="text-muted-foreground">Workplace incident tracking</p>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <KPICard
-          title="Total Incidents"
-          subtitle="All incidents"
-          value={stats.totalIncidents}
-          icon={<AlertTriangle className="w-5 h-5" />}
-          color="bg-red-50 text-red-600"
-        />
-        <KPICard
-          title="Open Cases"
-          subtitle="Under investigation"
-          value={stats.openIncidents}
-          icon={<AlertTriangle className="w-5 h-5" />}
-          color="bg-orange-50 text-orange-600"
-        />
-        <KPICard
-          title="Closed"
-          subtitle="Resolved incidents"
-          value={stats.totalIncidents - stats.openIncidents}
-          icon={<CheckCircle className="w-5 h-5" />}
-          color="bg-green-50 text-green-600"
-        />
-      </div>
-    </div>
+    <DraggableGridSection
+      sectionId="incidents"
+      title="Incidents"
+      description="Workplace incident tracking. Drag cards to reposition, drag corners to resize."
+      defaultLayout={defaultLayout}
+    >
+      {(lockStates, toggleLock) => (
+        <>
+          <div key="total-incidents">
+            <EnhancedDraggableCard
+              id="total-incidents"
+              title="Total Incidents"
+              subtitle="All incidents"
+              value={stats.totalIncidents}
+              icon={<AlertTriangle className="w-5 h-5" />}
+              color="bg-red-50 text-red-600"
+              isLocked={lockStates["total-incidents"]}
+              onToggleLock={() => toggleLock("total-incidents")}
+            />
+          </div>
+          <div key="open-incidents">
+            <EnhancedDraggableCard
+              id="open-incidents"
+              title="Open Cases"
+              subtitle="Under investigation"
+              value={stats.openIncidents}
+              icon={<AlertTriangle className="w-5 h-5" />}
+              color="bg-orange-50 text-orange-600"
+              isLocked={lockStates["open-incidents"]}
+              onToggleLock={() => toggleLock("open-incidents")}
+            />
+          </div>
+          <div key="closed-incidents">
+            <EnhancedDraggableCard
+              id="closed-incidents"
+              title="Closed"
+              subtitle="Resolved incidents"
+              value={stats.totalIncidents - stats.openIncidents}
+              icon={<CheckCircle className="w-5 h-5" />}
+              color="bg-green-50 text-green-600"
+              isLocked={lockStates["closed-incidents"]}
+              onToggleLock={() => toggleLock("closed-incidents")}
+            />
+          </div>
+        </>
+      )}
+    </DraggableGridSection>
   );
 }
 
@@ -1302,29 +1354,48 @@ function TrainingsSection({
   trainingMatrix: TrainingStatus[];
   chartData: any[];
 }) {
+  const defaultLayout = [
+    { i: "total-courses", x: 0, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
+    { i: "compliance-rate", x: 3, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
+  ];
+
   return (
     <div className="space-y-8">
-      <div>
-        <h2 className="text-2xl font-bold mb-2">Trainings</h2>
-        <p className="text-muted-foreground">Employee training compliance</p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <KPICard
-          title="Total Courses"
-          subtitle="Training programs"
-          value={stats.totalTrainings}
-          icon={<GraduationCap className="w-5 h-5" />}
-          color="bg-green-50 text-green-600"
-        />
-        <KPICard
-          title="Compliance Rate"
-          subtitle="Overall compliance"
-          value={`${stats.trainingCompliance}%`}
-          icon={<CheckCircle className="w-5 h-5" />}
-          color="bg-blue-50 text-blue-600"
-        />
-      </div>
+      <DraggableGridSection
+        sectionId="trainings"
+        title="Trainings"
+        description="Employee training compliance. Drag cards to reposition, drag corners to resize."
+        defaultLayout={defaultLayout}
+      >
+        {(lockStates, toggleLock) => (
+          <>
+            <div key="total-courses">
+              <EnhancedDraggableCard
+                id="total-courses"
+                title="Total Courses"
+                subtitle="Training programs"
+                value={stats.totalTrainings}
+                icon={<GraduationCap className="w-5 h-5" />}
+                color="bg-green-50 text-green-600"
+                isLocked={lockStates["total-courses"]}
+                onToggleLock={() => toggleLock("total-courses")}
+              />
+            </div>
+            <div key="compliance-rate">
+              <EnhancedDraggableCard
+                id="compliance-rate"
+                title="Compliance Rate"
+                subtitle="Overall compliance"
+                value={`${stats.trainingCompliance}%`}
+                icon={<CheckCircle className="w-5 h-5" />}
+                color="bg-blue-50 text-blue-600"
+                isLocked={lockStates["compliance-rate"]}
+                onToggleLock={() => toggleLock("compliance-rate")}
+              />
+            </div>
+          </>
+        )}
+      </DraggableGridSection>
 
       {/* Training Matrix */}
       <Card className="border shadow-sm">
@@ -1396,82 +1467,134 @@ function TrainingsSection({
 }
 
 function MeasuresSection({ stats, chartData }: { stats: ReportStats; chartData: any[] }) {
+  const defaultLayout = [
+    { i: "total-measures", x: 0, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
+    { i: "completed-measures", x: 3, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
+    { i: "in-progress-measures", x: 6, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
+  ];
+
   return (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-2xl font-bold mb-2">Measures</h2>
-        <p className="text-muted-foreground">Corrective and preventive actions</p>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <KPICard
-          title="Total Measures"
-          subtitle="All measures"
-          value={stats.totalMeasures}
-          icon={<CheckCircle className="w-5 h-5" />}
-          color="bg-purple-50 text-purple-600"
-        />
-        <KPICard
-          title="Completed"
-          subtitle="Finished measures"
-          value={stats.completedMeasures}
-          icon={<CheckCircle className="w-5 h-5" />}
-          color="bg-green-50 text-green-600"
-        />
-        <KPICard
-          title="In Progress"
-          subtitle="Active measures"
-          value={stats.totalMeasures - stats.completedMeasures}
-          icon={<TrendingUp className="w-5 h-5" />}
-          color="bg-orange-50 text-orange-600"
-        />
-      </div>
-    </div>
+    <DraggableGridSection
+      sectionId="measures"
+      title="Measures"
+      description="Corrective and preventive actions. Drag cards to reposition, drag corners to resize."
+      defaultLayout={defaultLayout}
+    >
+      {(lockStates, toggleLock) => (
+        <>
+          <div key="total-measures">
+            <EnhancedDraggableCard
+              id="total-measures"
+              title="Total Measures"
+              subtitle="All measures"
+              value={stats.totalMeasures}
+              icon={<CheckCircle className="w-5 h-5" />}
+              color="bg-purple-50 text-purple-600"
+              isLocked={lockStates["total-measures"]}
+              onToggleLock={() => toggleLock("total-measures")}
+            />
+          </div>
+          <div key="completed-measures">
+            <EnhancedDraggableCard
+              id="completed-measures"
+              title="Completed"
+              subtitle="Finished measures"
+              value={stats.completedMeasures}
+              icon={<CheckCircle className="w-5 h-5" />}
+              color="bg-green-50 text-green-600"
+              isLocked={lockStates["completed-measures"]}
+              onToggleLock={() => toggleLock("completed-measures")}
+            />
+          </div>
+          <div key="in-progress-measures">
+            <EnhancedDraggableCard
+              id="in-progress-measures"
+              title="In Progress"
+              subtitle="Active measures"
+              value={stats.totalMeasures - stats.completedMeasures}
+              icon={<TrendingUp className="w-5 h-5" />}
+              color="bg-orange-50 text-orange-600"
+              isLocked={lockStates["in-progress-measures"]}
+              onToggleLock={() => toggleLock("in-progress-measures")}
+            />
+          </div>
+        </>
+      )}
+    </DraggableGridSection>
   );
 }
 
 function TasksSection({ stats, chartData }: { stats: ReportStats; chartData: any[] }) {
+  const defaultLayout = [
+    { i: "total-tasks", x: 0, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
+    { i: "completed-tasks", x: 3, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
+  ];
+
   return (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-2xl font-bold mb-2">Tasks</h2>
-        <p className="text-muted-foreground">Task management and completion</p>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <KPICard
-          title="Total Tasks"
-          subtitle="All tasks"
-          value={stats.totalTasks}
-          icon={<ListChecks className="w-5 h-5" />}
-          color="bg-indigo-50 text-indigo-600"
-        />
-        <KPICard
-          title="Completed"
-          subtitle="Finished tasks"
-          value={stats.completedTasks}
-          icon={<CheckCircle className="w-5 h-5" />}
-          color="bg-green-50 text-green-600"
-        />
-      </div>
-    </div>
+    <DraggableGridSection
+      sectionId="tasks"
+      title="Tasks"
+      description="Task management and completion. Drag cards to reposition, drag corners to resize."
+      defaultLayout={defaultLayout}
+    >
+      {(lockStates, toggleLock) => (
+        <>
+          <div key="total-tasks">
+            <EnhancedDraggableCard
+              id="total-tasks"
+              title="Total Tasks"
+              subtitle="All tasks"
+              value={stats.totalTasks}
+              icon={<ListChecks className="w-5 h-5" />}
+              color="bg-indigo-50 text-indigo-600"
+              isLocked={lockStates["total-tasks"]}
+              onToggleLock={() => toggleLock("total-tasks")}
+            />
+          </div>
+          <div key="completed-tasks">
+            <EnhancedDraggableCard
+              id="completed-tasks"
+              title="Completed"
+              subtitle="Finished tasks"
+              value={stats.completedTasks}
+              icon={<CheckCircle className="w-5 h-5" />}
+              color="bg-green-50 text-green-600"
+              isLocked={lockStates["completed-tasks"]}
+              onToggleLock={() => toggleLock("completed-tasks")}
+            />
+          </div>
+        </>
+      )}
+    </DraggableGridSection>
   );
 }
 
 function CheckupsSection({ stats }: { stats: ReportStats }) {
+  const defaultLayout = [
+    { i: "total-checkups", x: 0, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
+  ];
+
   return (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-2xl font-bold mb-2">Health Check-ups</h2>
-        <p className="text-muted-foreground">Employee health monitoring</p>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <KPICard
-          title="Total Check-ups"
-          subtitle="Health monitoring"
-          value={stats.totalCheckUps}
-          icon={<Stethoscope className="w-5 h-5" />}
-          color="bg-teal-50 text-teal-600"
-        />
-      </div>
-    </div>
+    <DraggableGridSection
+      sectionId="checkups"
+      title="Health Check-ups"
+      description="Employee health monitoring. Drag cards to reposition, drag corners to resize."
+      defaultLayout={defaultLayout}
+    >
+      {(lockStates, toggleLock) => (
+        <div key="total-checkups">
+          <EnhancedDraggableCard
+            id="total-checkups"
+            title="Total Check-ups"
+            subtitle="Health monitoring"
+            value={stats.totalCheckUps}
+            icon={<Stethoscope className="w-5 h-5" />}
+            color="bg-teal-50 text-teal-600"
+            isLocked={lockStates["total-checkups"]}
+            onToggleLock={() => toggleLock("total-checkups")}
+          />
+        </div>
+      )}
+    </DraggableGridSection>
   );
 }

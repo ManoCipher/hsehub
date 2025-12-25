@@ -604,34 +604,34 @@ export default function Reports() {
 
 // Section Components
 
-// Default layout for the dashboard grid - optimized for visual appeal
+// Default layout for the dashboard grid - 2-column layout matching image
 const defaultLayouts = {
   lg: [
-    { i: "risk-assessments", x: 0, y: 0, w: 3, h: 2.5, minW: 2, minH: 2, static: false },
-    { i: "safety-audits", x: 3, y: 0, w: 3, h: 2.5, minW: 2, minH: 2, static: false },
-    { i: "incidents", x: 6, y: 0, w: 3, h: 2.5, minW: 2, minH: 2, static: false },
-    { i: "training-compliance", x: 9, y: 0, w: 3, h: 2.5, minW: 2, minH: 2, static: false },
-    { i: "incident-trends", x: 0, y: 2.5, w: 8, h: 5, minW: 6, minH: 4, static: false },
-    { i: "audit-completion", x: 8, y: 2.5, w: 4, h: 5, minW: 3, minH: 4, static: false },
-    { i: "task-completion", x: 0, y: 7.5, w: 6, h: 4, minW: 4, minH: 3, static: false },
+    { i: "risk-assessments", x: 0, y: 0, w: 3, h: 3, minW: 2, minH: 2.5, static: false },
+    { i: "safety-audits", x: 3, y: 0, w: 3, h: 3, minW: 2, minH: 2.5, static: false },
+    { i: "incidents", x: 0, y: 3, w: 3, h: 3, minW: 2, minH: 2.5, static: false },
+    { i: "training-compliance", x: 3, y: 3, w: 3, h: 3, minW: 2, minH: 2.5, static: false },
+    { i: "incident-trends", x: 6, y: 0, w: 6, h: 6, minW: 4, minH: 4, static: false },
+    { i: "audit-completion", x: 0, y: 6, w: 6, h: 5, minW: 4, minH: 4, static: false },
+    { i: "task-completion", x: 6, y: 6, w: 6, h: 5, minW: 4, minH: 4, static: false },
   ],
   md: [
-    { i: "risk-assessments", x: 0, y: 0, w: 5, h: 2.5, minW: 3, minH: 2, static: false },
-    { i: "safety-audits", x: 5, y: 0, w: 5, h: 2.5, minW: 3, minH: 2, static: false },
-    { i: "incidents", x: 0, y: 2.5, w: 5, h: 2.5, minW: 3, minH: 2, static: false },
-    { i: "training-compliance", x: 5, y: 2.5, w: 5, h: 2.5, minW: 3, minH: 2, static: false },
-    { i: "incident-trends", x: 0, y: 5, w: 10, h: 5, minW: 6, minH: 4, static: false },
-    { i: "audit-completion", x: 0, y: 10, w: 5, h: 4, minW: 4, minH: 3, static: false },
-    { i: "task-completion", x: 5, y: 10, w: 5, h: 4, minW: 4, minH: 3, static: false },
+    { i: "risk-assessments", x: 0, y: 0, w: 5, h: 3, minW: 3, minH: 2.5, static: false },
+    { i: "safety-audits", x: 5, y: 0, w: 5, h: 3, minW: 3, minH: 2.5, static: false },
+    { i: "incidents", x: 0, y: 3, w: 5, h: 3, minW: 3, minH: 2.5, static: false },
+    { i: "training-compliance", x: 5, y: 3, w: 5, h: 3, minW: 3, minH: 2.5, static: false },
+    { i: "incident-trends", x: 0, y: 6, w: 10, h: 5, minW: 6, minH: 4, static: false },
+    { i: "audit-completion", x: 0, y: 11, w: 5, h: 5, minW: 4, minH: 4, static: false },
+    { i: "task-completion", x: 5, y: 11, w: 5, h: 5, minW: 4, minH: 4, static: false },
   ],
   sm: [
-    { i: "risk-assessments", x: 0, y: 0, w: 6, h: 2.5, minW: 3, minH: 2, static: false },
-    { i: "safety-audits", x: 0, y: 2.5, w: 6, h: 2.5, minW: 3, minH: 2, static: false },
-    { i: "incidents", x: 0, y: 5, w: 6, h: 2.5, minW: 3, minH: 2, static: false },
-    { i: "training-compliance", x: 0, y: 7.5, w: 6, h: 2.5, minW: 3, minH: 2, static: false },
-    { i: "incident-trends", x: 0, y: 10, w: 6, h: 5, minW: 4, minH: 4, static: false },
-    { i: "audit-completion", x: 0, y: 15, w: 6, h: 4, minW: 3, minH: 3, static: false },
-    { i: "task-completion", x: 0, y: 19, w: 6, h: 4, minW: 3, minH: 3, static: false },
+    { i: "risk-assessments", x: 0, y: 0, w: 6, h: 3, minW: 3, minH: 2.5, static: false },
+    { i: "safety-audits", x: 0, y: 3, w: 6, h: 3, minW: 3, minH: 2.5, static: false },
+    { i: "incidents", x: 0, y: 6, w: 6, h: 3, minW: 3, minH: 2.5, static: false },
+    { i: "training-compliance", x: 0, y: 9, w: 6, h: 3, minW: 3, minH: 2.5, static: false },
+    { i: "incident-trends", x: 0, y: 12, w: 6, h: 5, minW: 4, minH: 4, static: false },
+    { i: "audit-completion", x: 0, y: 17, w: 6, h: 5, minW: 3, minH: 4, static: false },
+    { i: "task-completion", x: 0, y: 22, w: 6, h: 5, minW: 3, minH: 4, static: false },
   ],
 };
 
@@ -762,6 +762,8 @@ function OverviewSection({
         margin={[18, 18]}
         containerPadding={[0, 0]}
         compactType="vertical"
+        preventCollision={false}
+        autoSize={true}
       >
         {/* Risk Assessments Card */}
         <div key="risk-assessments">
@@ -1090,6 +1092,8 @@ function DraggableGridSection({
         margin={[18, 18]}
         containerPadding={[0, 0]}
         compactType="vertical"
+        preventCollision={false}
+        autoSize={true}
       >
         {children(lockStates, toggleLock)}
       </ResponsiveGridLayout>
@@ -1141,14 +1145,14 @@ function EnhancedDraggableCard({
         )}
       </div>
       <CardContent className="flex-1 flex flex-col justify-center items-center p-4 min-h-0 group">
-        <div className={`rounded-lg ${color} flex items-center justify-center mb-2 transition-transform group-hover:scale-105`} style={{ width: 'clamp(32px, 15%, 48px)', height: 'clamp(32px, 15%, 48px)' }}>
-          <div className="w-4 h-4" style={{ transform: 'scale(clamp(0.8, 1, 1.2))' }}>
+        <div className={`rounded-lg ${color} flex items-center justify-center mb-3 transition-transform group-hover:scale-105`} style={{ width: 'clamp(40px, 18%, 56px)', height: 'clamp(40px, 18%, 56px)' }}>
+          <div className="w-5 h-5" style={{ transform: 'scale(clamp(0.9, 1, 1.3))' }}>
             {icon}
           </div>
         </div>
-        <h3 className="font-medium text-muted-foreground mb-0.5 text-center" style={{ fontSize: 'clamp(0.75rem, 2.5vw, 0.875rem)' }}>{title}</h3>
-        <p className="text-muted-foreground mb-2 text-center" style={{ fontSize: 'clamp(0.65rem, 2vw, 0.75rem)' }}>{subtitle}</p>
-        <p className="font-bold text-center" style={{ fontSize: 'clamp(1.25rem, 5vw, 2rem)', lineHeight: '1.2' }}>{value}</p>
+        <h3 className="font-semibold text-foreground mb-1 text-center" style={{ fontSize: 'clamp(0.875rem, 2.8vw, 1rem)', lineHeight: '1.3' }}>{title}</h3>
+        <p className="text-muted-foreground mb-2 text-center" style={{ fontSize: 'clamp(0.75rem, 2.2vw, 0.875rem)' }}>{subtitle}</p>
+        <p className="font-bold text-center" style={{ fontSize: 'clamp(1.5rem, 5.5vw, 2.25rem)', lineHeight: '1.1' }}>{value}</p>
       </CardContent>
     </Card>
   );
@@ -1174,14 +1178,14 @@ function DraggableCard({
         <GripVertical className="w-3.5 h-3.5 text-muted-foreground" />
       </div>
       <CardContent className="flex-1 flex flex-col justify-center items-center p-4 min-h-0">
-        <div className={`rounded-lg ${color} flex items-center justify-center mb-2`} style={{ width: 'clamp(32px, 15%, 48px)', height: 'clamp(32px, 15%, 48px)' }}>
-          <div className="w-4 h-4">
+        <div className={`rounded-lg ${color} flex items-center justify-center mb-3`} style={{ width: 'clamp(40px, 18%, 56px)', height: 'clamp(40px, 18%, 56px)' }}>
+          <div className="w-5 h-5">
             {icon}
           </div>
         </div>
-        <h3 className="font-medium text-muted-foreground mb-0.5 text-center" style={{ fontSize: 'clamp(0.75rem, 2.5vw, 0.875rem)' }}>{title}</h3>
-        <p className="text-muted-foreground mb-2 text-center" style={{ fontSize: 'clamp(0.65rem, 2vw, 0.75rem)' }}>{subtitle}</p>
-        <p className="font-bold text-center" style={{ fontSize: 'clamp(1.25rem, 5vw, 2rem)', lineHeight: '1.2' }}>{value}</p>
+        <h3 className="font-semibold text-foreground mb-1 text-center" style={{ fontSize: 'clamp(0.875rem, 2.8vw, 1rem)', lineHeight: '1.3' }}>{title}</h3>
+        <p className="text-muted-foreground mb-2 text-center" style={{ fontSize: 'clamp(0.75rem, 2.2vw, 0.875rem)' }}>{subtitle}</p>
+        <p className="font-bold text-center" style={{ fontSize: 'clamp(1.5rem, 5.5vw, 2.25rem)', lineHeight: '1.1' }}>{value}</p>
       </CardContent>
     </Card>
   );

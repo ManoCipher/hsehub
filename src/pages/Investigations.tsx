@@ -90,7 +90,7 @@ interface HealthCheckup {
   employee_id: string;
   company_id: string;
   investigation_name: string;
-  appointment_date: string;
+  appointment_date: string | null;
   completion_date?: string | null;
   due_date?: string | null;
   status: string;

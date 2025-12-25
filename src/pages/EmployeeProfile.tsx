@@ -119,7 +119,7 @@ interface HealthCheckup {
   company_id: string;
   investigation_id?: string;
   investigation_name?: string;
-  appointment_date: string;
+  appointment_date: string | null;
   completion_date?: string | null;
   due_date?: string | null;
   status: string;
@@ -1446,11 +1446,8 @@ export default function EmployeeProfile() {
   };
 
   const handleCreateCheckup = async () => {
-    if (
-      !checkupFormData.investigation_id ||
-      !checkupFormData.appointment_date
-    ) {
-      toast.error("Please select investigation and appointment date");
+    if (!checkupFormData.investigation_id) {
+      toast.error("Please select investigation");
       return;
     }
 
@@ -1476,7 +1473,7 @@ export default function EmployeeProfile() {
         employee_id: id,
         company_id: companyId,
         investigation_name: investigationName, // Store full G-investigation name
-        appointment_date: checkupFormData.appointment_date,
+        appointment_date: checkupFormData.appointment_date || null,
         status: checkupFormData.status,
         notes: checkupFormData.notes,
       };
@@ -1539,10 +1536,12 @@ export default function EmployeeProfile() {
       await logActivity(
         "Created health check-up",
         "create",
-        `Scheduled check-up: ${investigationName} on ${checkupFormData.appointment_date}`,
+        checkupFormData.appointment_date
+          ? `Scheduled check-up: ${investigationName} on ${checkupFormData.appointment_date}`
+          : `Created check-up: ${investigationName} (appointment date to be scheduled)`,
         {
           investigationId: checkupFormData.investigation_id,
-          appointmentDate: checkupFormData.appointment_date,
+          appointmentDate: checkupFormData.appointment_date || null,
           status: checkupFormData.status,
         }
       );
@@ -3569,7 +3568,7 @@ export default function EmployeeProfile() {
                   {/* Date Fields - Row Layout */}
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <Label>Appointment Date</Label>
+                      <Label>Appointment Date (Optional)</Label>
                       <Input
                         type="date"
                         value={checkupFormData.appointment_date}
@@ -3579,6 +3578,7 @@ export default function EmployeeProfile() {
                             appointment_date: e.target.value,
                           })
                         }
+                        placeholder="dd.mm.yyyy"
                       />
                     </div>
 
